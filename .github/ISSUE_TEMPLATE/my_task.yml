@@ -2,26 +2,19 @@ name: 📋 タスク
 description: 実施すべきタスクを記録してください
 title: "[Task]: "
 labels: ["task"]
+assignees: []
 body:
   - type: markdown
     attributes:
       value: |
         タスクの詳細を記入してください。
 
-  - type: input
-    id: title
-    attributes:
-      label: タスクタイトル
-      description: タスクを端的に表すタイトル
-      placeholder: 例：ユーザー認証機能の実装
-    validations:
-      required: true
-
   - type: textarea
     id: description
     attributes:
       label: タスク内容
       description: 実施するタスクの詳細を説明してください
+      placeholder: 何を実施するのか具体的に記載してください
     validations:
       required: true
 
@@ -39,10 +32,9 @@ body:
       label: 実施項目
       description: タスクをチェックリスト形式で分解してください
       value: |
-        - [ ] 
-        - [ ] 
-        - [ ] 
-        - [ ] 
+        - [ ] タスク項目1
+        - [ ] タスク項目2
+        - [ ] タスク項目3
     validations:
       required: true
 
@@ -51,14 +43,11 @@ body:
     attributes:
       label: 完了条件
       description: このタスクが完了したと判断する基準を明記してください
-      placeholder: |
-        - 
-        - 
     validations:
       required: true
 
   - type: dropdown
-    id: type
+    id: task-type
     attributes:
       label: タスク種別
       options:
@@ -91,7 +80,7 @@ body:
     attributes:
       label: 開始予定日
       description: YYYY-MM-DD形式で入力してください
-      placeholder: 2024-01-01
+      placeholder: "2024-01-01"
     validations:
       required: false
 
@@ -100,7 +89,7 @@ body:
     attributes:
       label: 完了予定日
       description: YYYY-MM-DD形式で入力してください
-      placeholder: 2024-01-31
+      placeholder: "2024-01-31"
     validations:
       required: false
 
@@ -110,6 +99,7 @@ body:
       label: 依存関係
       description: このタスクが依存する他のタスクやIssueがあれば記載してください
       placeholder: |
+        例：
         - #123 の完了が必要
         - APIドキュメントの確定待ち
     validations:
