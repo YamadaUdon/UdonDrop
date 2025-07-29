@@ -79,6 +79,8 @@ function DataFlowEditorInner() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [showOnlyRelated, setShowOnlyRelated] = useState(false);
+  const [showUpstream, setShowUpstream] = useState(true);
+  const [showDownstream, setShowDownstream] = useState(true);
   const [lineageMode, setLineageMode] = useState<'none' | 'upstream' | 'downstream' | 'both'>('none');
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [showGroupManager, setShowGroupManager] = useState(false);
@@ -370,6 +372,8 @@ function DataFlowEditorInner() {
     setEdges([]);
     setSelectedNode(null);
     setShowOnlyRelated(false);
+    setShowUpstream(true);
+    setShowDownstream(true);
     // Clear localStorage as well
     localStorage.removeItem('dataflow_editor_nodes');
     localStorage.removeItem('dataflow_editor_edges');
@@ -537,6 +541,8 @@ function DataFlowEditorInner() {
       setEdges([]);
       setSelectedNode(null);
       setShowOnlyRelated(false);
+      setShowUpstream(true);
+      setShowDownstream(true);
       setLineageMode('none');
       setSelectedGroupIds(new Set());
       
@@ -656,28 +662,46 @@ function DataFlowEditorInner() {
   }, [nodes, edges, setNodes]);
 
   // Get related nodes for a given node with lineage options
-  const getRelatedNodes = useCallback((nodeId: string, currentNodes: Node[], currentEdges: Edge[]) => {
+  const getRelatedNodes = useCallback((nodeId: string, currentNodes: Node[], currentEdges: Edge[], includeUpstream: boolean, includeDownstream: boolean) => {
     const relatedNodeIds = new Set<string>();
     relatedNodeIds.add(nodeId);
     
-    // Find all connected nodes (both upstream and downstream)
-    const findConnectedNodes = (targetNodeId: string, visited: Set<string>) => {
-      if (visited.has(targetNodeId)) return;
-      visited.add(targetNodeId);
-      
-      currentEdges.forEach(edge => {
-        if (edge.source === targetNodeId && !visited.has(edge.target)) {
-          relatedNodeIds.add(edge.target);
-          findConnectedNodes(edge.target, visited);
-        }
-        if (edge.target === targetNodeId && !visited.has(edge.source)) {
-          relatedNodeIds.add(edge.source);
-          findConnectedNodes(edge.source, visited);
-        }
-      });
-    };
+    // Find upstream nodes (only follow input connections)
+    if (includeUpstream) {
+      const findUpstreamNodes = (targetNodeId: string, visited: Set<string>) => {
+        if (visited.has(targetNodeId)) return;
+        visited.add(targetNodeId);
+        
+        currentEdges.forEach(edge => {
+          // Only follow edges where current node is the target (receiving data)
+          if (edge.target === targetNodeId && !visited.has(edge.source)) {
+            relatedNodeIds.add(edge.source);
+            // Recursively find upstream nodes of this source node
+            findUpstreamNodes(edge.source, visited);
+          }
+        });
+      };
+      findUpstreamNodes(nodeId, new Set());
+    }
     
-    findConnectedNodes(nodeId, new Set());
+    // Find downstream nodes (only follow output connections)
+    if (includeDownstream) {
+      const findDownstreamNodes = (sourceNodeId: string, visited: Set<string>) => {
+        if (visited.has(sourceNodeId)) return;
+        visited.add(sourceNodeId);
+        
+        currentEdges.forEach(edge => {
+          // Only follow edges where current node is the source (sending data)
+          if (edge.source === sourceNodeId && !visited.has(edge.target)) {
+            relatedNodeIds.add(edge.target);
+            // Recursively find downstream nodes of this target node
+            findDownstreamNodes(edge.target, visited);
+          }
+        });
+      };
+      findDownstreamNodes(nodeId, new Set());
+    }
+    
     return relatedNodeIds;
   }, []);
 
@@ -829,7 +853,7 @@ function DataFlowEditorInner() {
     
     if (showOnlyRelated) {
       selectedNodesForFiltering.forEach(selectedNode => {
-        const relatedIds = getRelatedNodes(selectedNode.id, processedNodes, processedEdges);
+        const relatedIds = getRelatedNodes(selectedNode.id, processedNodes, processedEdges, showUpstream, showDownstream);
         relatedIds.forEach(id => allRelatedNodeIds.add(id));
       });
     }
@@ -907,7 +931,7 @@ function DataFlowEditorInner() {
     });
     
     return { displayNodes: filteredNodes, displayEdges: filteredEdges };
-  }, [nodes, edges, showOnlyRelated, lineageMode, selectedGroupIds, editingNodeId, searchResults, theme, getRelatedNodes, getLineageNodes]);
+  }, [nodes, edges, showOnlyRelated, showUpstream, showDownstream, lineageMode, selectedGroupIds, editingNodeId, searchResults, theme, getRelatedNodes, getLineageNodes]);
 
   // Toggle show only related nodes
   const toggleShowOnlyRelated = useCallback(() => {
@@ -1032,6 +1056,8 @@ function DataFlowEditorInner() {
           display: 'flex',
           gap: '10px',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          maxWidth: 'calc(100vw - 320px)',
           background: `${theme.colors.surface}f0`,
           padding: '8px 12px',
           borderRadius: theme.borderRadius.md,
@@ -1112,6 +1138,50 @@ function DataFlowEditorInner() {
             />
             {t('filter.showRelated')}
           </label>
+          
+          {showOnlyRelated && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              paddingLeft: '8px',
+              borderLeft: `2px solid ${theme.colors.border}`,
+            }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: theme.typography.fontSize.sm,
+                color: theme.colors.textSecondary,
+                cursor: 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={showUpstream}
+                  onChange={(e) => setShowUpstream(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {t('filter.showUpstream')}
+              </label>
+              
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: theme.typography.fontSize.sm,
+                color: theme.colors.textSecondary,
+                cursor: 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={showDownstream}
+                  onChange={(e) => setShowDownstream(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {t('filter.showDownstream')}
+              </label>
+            </div>
+          )}
           
           <button
             onClick={handleAutoLayout}

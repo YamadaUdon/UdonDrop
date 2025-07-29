@@ -65,6 +65,8 @@
   },
   "filter": {
     "showRelated": "Show only related nodes",
+    "showUpstream": "Input side",
+    "showDownstream": "Output side",
     "lineage": "Lineage",
     "none": "None",
     "upstream": "Upstream",

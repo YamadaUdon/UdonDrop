@@ -65,6 +65,8 @@
   },
   "filter": {
     "showRelated": "関連ノードのみ表示",
+    "showUpstream": "入力側",
+    "showDownstream": "出力側",
     "lineage": "リネージュ",
     "none": "なし",
     "upstream": "上流",
