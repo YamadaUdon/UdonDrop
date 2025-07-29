@@ -1,0 +1,12 @@
+# .github/ISSUE_TEMPLATE/config.yml
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 ディスカッション
+    url: https://github.com/YOUR_ORG/YOUR_REPO/discussions
+    about: アイデアや一般的な質問はこちら
+  - name: 📖 ドキュメント
+    url: https://your-docs-site.com
+    about: 詳細なドキュメントはこちら
+  - name: 💼 商用サポート
+    url: https://your-support.com
+    about: 有償サポートについて

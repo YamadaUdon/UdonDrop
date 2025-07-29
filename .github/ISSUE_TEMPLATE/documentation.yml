@@ -1,0 +1,55 @@
+name: 📚 ドキュメント
+description: ドキュメントの追加・更新・修正
+title: "[Doc]: "
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ドキュメントに関する提案や問題を報告してください。
+
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: ドキュメントの種類
+      options:
+        - 新規作成
+        - 既存の更新
+        - 誤字・誤りの修正
+        - 構成の改善
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 内容
+      description: 変更内容を説明してください
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: 対象ファイル/セクション
+      description: 変更対象となるファイルパスやセクション名
+      placeholder: 例：README.md の Installation セクション
+    validations:
+      required: false
+
+  - type: textarea
+    id: reason
+    attributes:
+      label: 変更理由
+      description: なぜこの変更が必要なのか説明してください
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-content
+    attributes:
+      label: 提案内容
+      description: 新しい内容や修正案を記載してください（Markdown可）
+      render: markdown
+    validations:
+      required: false
