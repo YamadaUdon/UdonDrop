@@ -1,0 +1,65 @@
+/* Custom Scrollbar Styles */
+
+/* Light theme scrollbar */
+.scrollbar-light {
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #f8fafc;
+}
+
+.scrollbar-light::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-light::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.scrollbar-light::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-light::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Dark theme scrollbar */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: #6b7280 #2d2d2d;
+}
+
+.scrollbar-dark::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: #2d2d2d;
+  border-radius: 4px;
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: #6b7280;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* General scrollbar improvements */
+.custom-scrollbar {
+  scrollbar-width: thin;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}

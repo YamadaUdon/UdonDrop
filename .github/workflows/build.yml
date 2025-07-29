@@ -1,0 +1,164 @@
+name: 'publish'
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest' # for Intel based macs.
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # Rust cacheを追加してビルド時間を短縮
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # yarn cacheの設定（Windows対応版）
+      - name: Get yarn cache directory path (Unix)
+        if: runner.os != 'Windows'
+        id: yarn-cache-dir-path-unix
+        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
+
+      - name: Get yarn cache directory path (Windows)
+        if: runner.os == 'Windows'
+        id: yarn-cache-dir-path-windows
+        run: echo "dir=$(yarn cache dir)" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Cache yarn dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.yarn-cache-dir-path-unix.outputs.dir || steps.yarn-cache-dir-path-windows.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: install frontend dependencies
+        run: yarn install
+
+      # ビルド前の環境確認（デバッグ用）
+      - name: Check build environment
+        run: |
+          echo "Node version: $(node --version)"
+          echo "Yarn version: $(yarn --version)"
+          echo "Rustc version: $(rustc --version)"
+          echo "Cargo version: $(cargo --version)"
+          echo "Current directory: $(pwd)"
+        shell: bash
+
+      # Tauri CLIの確認
+      - name: Check Tauri CLI
+        run: |
+          yarn tauri --version || echo "Tauri CLI not found"
+          yarn tauri info || echo "Failed to get Tauri info"
+
+      # フロントエンドのビルドを明示的に実行
+      - name: Build frontend
+        run: yarn build
+
+      # ビルド後のdistディレクトリ確認
+      - name: Check dist directory (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          echo "Checking dist directory:"
+          ls -la dist/ || echo "dist directory not found"
+
+      - name: Check dist directory (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "Checking dist directory:"
+          dir dist\ || echo "dist directory not found"
+        shell: cmd
+
+      # Windows用の追加設定
+      - name: Windows specific setup
+        if: matrix.platform == 'windows-latest'
+        run: |
+          echo "Windows build environment ready"
+
+      # macOS用の追加設定（コード署名なしの場合）
+      - name: macOS specific setup
+        if: matrix.platform == 'macos-latest'
+        run: |
+          echo "macOS build environment ready"
+
+      # Tauriアプリのビルド
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: 'App v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # ビルド失敗時のデバッグ情報
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.platform }}-${{ strategy.job-index }}
+          path: |
+            src-tauri/target/release/build/*/output
+            src-tauri/target/debug/build/*/output
+          retention-days: 5
+
+      # macOSビルドのアーティファクト確認
+      - name: List macOS artifacts
+        if: matrix.platform == 'macos-latest' && success()
+        run: |
+          echo "Looking for macOS artifacts:"
+          find src-tauri/target -name "*.dmg" -o -name "*.app" | head -20
+
+      # Windowsビルドのアーティファクト確認
+      - name: List Windows artifacts
+        if: matrix.platform == 'windows-latest' && success()
+        run: |
+          echo "Looking for Windows artifacts:"
+          dir src-tauri\target\release\bundle\ /s /b 2>nul | findstr /E ".msi .exe .nsis" || echo "No Windows artifacts found"
+        shell: cmd
+
+      # Linuxビルドのアーティファクト確認
+      - name: List Linux artifacts
+        if: matrix.platform == 'ubuntu-22.04' && success()
+        run: |
+          echo "Looking for Linux artifacts:"
+          find src-tauri/target -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" | head -20
