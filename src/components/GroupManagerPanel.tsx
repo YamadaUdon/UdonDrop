@@ -1,4 +1,4 @@
-import { FC, useState, useEffect } from 'react';
+import { FC, useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../../node_modules/react-i18next';
 import { NodeGroup } from '../types';
 import { groupManager } from '../services/groupManager';
@@ -27,6 +27,10 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
     color: '',
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [position, setPosition] = useState({ x: window.innerWidth - 340, y: 80 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Load initial groups
@@ -140,19 +144,72 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
     }
   };
 
+  // Handle drag functionality
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, input, select')) {
+      return; // Don't start drag if clicking on interactive elements
+    }
+    
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+      setIsDragging(true);
+    }
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const newX = e.clientX - dragOffset.x;
+    const newY = e.clientY - dragOffset.y;
+    
+    // Keep panel within viewport bounds
+    const maxX = window.innerWidth - 320; // panel width
+    const maxY = window.innerHeight - 100; // minimum space from bottom
+    
+    setPosition({
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY)),
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Add global mouse event listeners for dragging
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none'; // Prevent text selection while dragging
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isDragging, dragOffset]);
+
   const panelStyle = {
     position: 'fixed' as const,
-    top: '10px',
-    right: '10px',
+    left: `${position.x}px`,
+    top: `${position.y}px`,
     backgroundColor: solitudeTheme.colors.background,
     border: `1px solid ${solitudeTheme.colors.border}`,
     borderRadius: solitudeTheme.borderRadius.lg,
     padding: solitudeTheme.spacing.md,
     width: '320px',
-    maxHeight: '80vh',
+    maxHeight: 'calc(100vh - 100px)',
     overflowY: 'auto' as const,
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-    zIndex: 99994,
+    boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.3)' : '0 4px 16px rgba(0,0,0,0.2)',
+    zIndex: 99996,
+    cursor: isDragging ? 'grabbing' : 'grab',
+    transition: isDragging ? 'none' : 'box-shadow 0.2s ease',
   };
 
   const headerStyle = {
@@ -162,6 +219,7 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
     marginBottom: solitudeTheme.spacing.md,
     borderBottom: `1px solid ${solitudeTheme.colors.border}`,
     paddingBottom: solitudeTheme.spacing.sm,
+    cursor: isDragging ? 'grabbing' : 'grab',
   };
 
   const buttonStyle = {
@@ -208,7 +266,11 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
   };
 
   return (
-    <div style={panelStyle}>
+    <div 
+      ref={panelRef}
+      style={panelStyle}
+      onMouseDown={handleMouseDown}
+    >
       <div style={headerStyle}>
         <h3 style={{ margin: 0, color: solitudeTheme.colors.textPrimary }}>
           {t('groups.title')}

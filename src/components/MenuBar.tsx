@@ -6,6 +6,7 @@ import { LanguageIcon } from './UIIcons';
 import { useTranslation } from '../../node_modules/react-i18next';
 import { usePipeline } from '../hooks/usePipeline';
 import { isTauri } from '../utils/platform';
+import { useNavigate } from 'react-router-dom';
 
 interface MenuBarProps {
   nodes: Node[];
@@ -26,6 +27,7 @@ const MenuBar: FC<MenuBarProps> = ({ nodes, edges, onSave, onLoad, onNew, onExpo
   const [pipelineName, setPipelineName] = useState('');
   const [pipelineDescription, setPipelineDescription] = useState('');
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const [availablePipelines, setAvailablePipelines] = useState<string[]>([]);
   const [searchFilter, setSearchFilter] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,21 +35,25 @@ const MenuBar: FC<MenuBarProps> = ({ nodes, edges, onSave, onLoad, onNew, onExpo
   const theme = getTheme(isDark);
   const { t, i18n } = useTranslation();
   const { loadPipeline, listPipelines } = usePipeline();
+  const navigate = useNavigate();
 
-  // Close language menu when clicking outside
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (!target.closest('[data-language-menu]')) {
         setShowLanguageMenu(false);
       }
+      if (!target.closest('[data-hamburger-menu]')) {
+        setShowHamburgerMenu(false);
+      }
     };
 
-    if (showLanguageMenu) {
+    if (showLanguageMenu || showHamburgerMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showLanguageMenu]);
+  }, [showLanguageMenu, showHamburgerMenu]);
 
   const handleSave = async () => {
     if (pipelineName.trim()) {
@@ -396,6 +402,82 @@ const MenuBar: FC<MenuBarProps> = ({ nodes, edges, onSave, onLoad, onNew, onExpo
                 {t('menu.exportJSON')}
               </button>
             </div>
+          </div>
+          
+          {/* Hamburger Menu */}
+          <div style={{ position: 'relative', display: 'inline-block' }} data-hamburger-menu>
+            <button
+              style={{
+                ...themeButtonStyle,
+                fontSize: '16px',
+                lineHeight: '1',
+                width: '32px',
+                height: '32px',
+              }}
+              onClick={() => setShowHamburgerMenu(!showHamburgerMenu)}
+              title="More options"
+            >
+              ☰
+            </button>
+            {showHamburgerMenu && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                backgroundColor: theme.colors.surface,
+                border: `1px solid ${theme.colors.border}`,
+                borderRadius: theme.borderRadius.md,
+                boxShadow: `0 2px 8px ${theme.colors.shadowMedium}`,
+                zIndex: 100000,
+                minWidth: '160px',
+                marginTop: '4px',
+              }}>
+                <button
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: theme.colors.textPrimary,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.md,
+                    transition: theme.transitions.fast,
+                  }}
+                  onClick={() => {
+                    navigate('/sql-generator');
+                    setShowHamburgerMenu(false);
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.surfaceHover}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  {t('menu.sqlGenerator')}
+                </button>
+                <button
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: theme.colors.textPrimary,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: theme.typography.fontSize.md,
+                    transition: theme.transitions.fast,
+                  }}
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                    setShowHamburgerMenu(false);
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.surfaceHover}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  {t('menu.importJSON')}
+                </button>
+              </div>
+            )}
           </div>
           
           <span style={{ fontSize: '12px', color: '#a0aec0' }}>
