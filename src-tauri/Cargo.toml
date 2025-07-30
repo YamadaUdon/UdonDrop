@@ -1,6 +1,6 @@
 [package]
 name = "udondrop"
-version = "0.1.0"
+version = "0.1.1"
 description = "UdonDrop"
 authors = ["YamadaUdon"]
 edition = "2024"
