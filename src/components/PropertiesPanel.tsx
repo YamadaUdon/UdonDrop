@@ -1,4 +1,4 @@
-import { FC, useState, useEffect } from 'react';
+import { FC, useState, useEffect, useRef } from 'react';
 import { Node } from 'reactflow';
 import { useTranslation } from '../../node_modules/react-i18next';
 import { NodeGroup } from '../types';
@@ -19,6 +19,10 @@ interface PropertiesPanelProps {
 const PropertiesPanel: FC<PropertiesPanelProps> = ({ selectedNode, onNodeUpdate, onNodeTypeChange, onClose, onEditingChange }) => {
   const [nodeData, setNodeData] = useState<any>({});
   const [availableGroups, setAvailableGroups] = useState<NodeGroup[]>([]);
+  const [position, setPosition] = useState({ x: window.innerWidth - 320, y: isTauri() ? 42 : 10 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
   const { isDark } = useTheme();
   const theme = getTheme(isDark);
   const { t } = useTranslation();
@@ -128,19 +132,72 @@ const PropertiesPanel: FC<PropertiesPanelProps> = ({ selectedNode, onNodeUpdate,
     }
   };
 
+  // Handle drag functionality
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, input, select, textarea')) {
+      return; // Don't start drag if clicking on interactive elements
+    }
+    
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+      setIsDragging(true);
+    }
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const newX = e.clientX - dragOffset.x;
+    const newY = e.clientY - dragOffset.y;
+    
+    // Keep panel within viewport bounds
+    const maxX = window.innerWidth - 300; // panel width
+    const maxY = window.innerHeight - 100; // minimum space from bottom
+    
+    setPosition({
+      x: Math.max(0, Math.min(newX, maxX)),
+      y: Math.max(0, Math.min(newY, maxY)),
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Add global mouse event listeners for dragging
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none'; // Prevent text selection while dragging
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isDragging, dragOffset]);
+
   const panelStyle = {
-    position: 'absolute' as const,
-    top: isTauri() ? '42px' : '10px', // 32px title bar + 10px margin
-    right: '10px',
+    position: 'fixed' as const,
+    left: `${position.x}px`,
+    top: `${position.y}px`,
     backgroundColor: theme.colors.surface,
     border: `1px solid ${theme.colors.border}`,
     borderRadius: '8px',
     width: '300px',
-    maxHeight: isTauri() ? 'calc(80vh - 32px)' : '80vh',
-    boxShadow: `0 2px 8px ${theme.colors.shadowMedium}`,
+    maxHeight: 'calc(100vh - 100px)',
+    boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.3)' : `0 2px 8px ${theme.colors.shadowMedium}`,
     zIndex: 99997,
     display: 'flex',
     flexDirection: 'column' as const,
+    cursor: isDragging ? 'grabbing' : 'grab',
+    transition: isDragging ? 'none' : 'box-shadow 0.2s ease',
   };
 
   const titleStyle = {
@@ -153,6 +210,7 @@ const PropertiesPanel: FC<PropertiesPanelProps> = ({ selectedNode, onNodeUpdate,
     borderBottom: `1px solid ${theme.colors.border}`,
     margin: '0',
     color: theme.colors.textPrimary,
+    cursor: isDragging ? 'grabbing' : 'grab',
   };
 
   const contentStyle = {
@@ -202,7 +260,12 @@ const PropertiesPanel: FC<PropertiesPanelProps> = ({ selectedNode, onNodeUpdate,
   }
 
   return (
-    <div style={panelStyle} data-panel-type="properties">
+    <div 
+      ref={panelRef}
+      style={panelStyle} 
+      data-panel-type="properties"
+      onMouseDown={handleMouseDown}
+    >
       <div style={titleStyle}>
         <span>{t('properties.title')}</span>
         {onClose && (

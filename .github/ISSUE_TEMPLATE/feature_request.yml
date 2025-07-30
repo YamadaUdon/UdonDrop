@@ -1,0 +1,103 @@
+name: ✨ 機能要望
+description: 新機能や改善を提案してください
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        新機能の提案ありがとうございます。以下の情報を記入してください。
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 提案する機能を簡潔に説明してください
+      placeholder: 例：ダークモードの実装
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解決したい課題
+      description: なぜこの機能が必要なのか、現在どのような課題があるのか説明してください
+      placeholder: |
+        現在の課題：
+        - 
+        - 
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 提案する解決策
+      description: 機能の詳細な仕様や動作を説明してください
+      placeholder: |
+        1. 機能の概要
+        2. 想定される動作
+        3. UIの変更点（あれば）
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 代替案
+      description: 他に検討した解決方法があれば記載してください
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 優先度
+      description: この機能の重要度をあなたの観点から選択してください
+      options:
+        - 🔴 必須（これがないと使えない）
+        - 🟡 重要（あると非常に便利）
+        - 🟢 あれば良い（nice to have）
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-cases
+    attributes:
+      label: ユースケース
+      description: この機能が必要となる具体的な使用例を記載してください
+      placeholder: |
+        1. ユーザーが〇〇したいとき
+        2. △△の状況で□□が必要なとき
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefits
+    attributes:
+      label: 期待される効果
+      description: この機能によってもたらされるメリットを記載してください
+      placeholder: |
+        - ユーザーにとって：
+        - ビジネスにとって：
+        - 技術的に：
+    validations:
+      required: false
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: モックアップ・参考資料
+      description: UIのイメージ図や参考になるリンクがあれば添付してください
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: 貢献意思
+      options:
+        - label: この機能の実装に協力する意思があります
+          required: false
+        - label: 既存のIssueに同様の要望がないことを確認しました
+          required: true

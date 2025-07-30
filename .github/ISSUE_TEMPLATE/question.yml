@@ -1,0 +1,62 @@
+name: ❓ 質問
+description: 使い方や実装について質問してください
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        質問する前に、ドキュメントやFAQを確認してください。
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 質問カテゴリ
+      options:
+        - 使い方について
+        - 実装方法について
+        - エラーについて
+        - パフォーマンスについて
+        - その他
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: 質問内容
+      description: できるだけ具体的に質問を記載してください
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 背景・試したこと
+      description: これまでに試したことや調べたことを記載してください
+      placeholder: |
+        - 公式ドキュメントの〇〇を確認した
+        - △△を試したが解決しなかった
+    validations:
+      required: false
+
+  - type: textarea
+    id: code
+    attributes:
+      label: 関連コード
+      description: 質問に関連するコードがあれば記載してください
+      render: javascript
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: 事前確認
+      options:
+        - label: ドキュメントを確認しました
+          required: true
+        - label: 既存のIssueを検索しました
+          required: true
+        - label: Stack Overflowなどで検索しました
+          required: false

@@ -9,16 +9,16 @@ UdonDropは、データフローを視覚的にデザインできるデスクト
 ## インストール方法
 
 ### Windows
-1. [リリースページ](https://github.com/yourusername/udon-drop/releases)から最新版の`UdonDrop_x.x.x_x64.msi`をダウンロード
+1. [リリースページ](https://github.com/YamadaUdon/UdonDrop/releases)から最新版の`UdonDrop_x.x.x_x64.msi`をダウンロード
 2. ダウンロードしたインストーラーを実行
 3. インストールウィザードに従ってインストール
 
 ### macOS
-1. [リリースページ](https://github.com/yourusername/udon-drop/releases)から最新版の`UdonDrop_x.x.x_universal.dmg`をダウンロード
+1. [リリースページ](https://github.com/YamadaUdon/UdonDrop/releases)から最新版の`UdonDrop_x.x.x_universal.dmg`をダウンロード
 2. DMGファイルを開き、UdonDropをApplicationsフォルダにドラッグ
 
 ### Linux
-1. [リリースページ](https://github.com/yourusername/udon-drop/releases)から最新版の`UdonDrop_x.x.x_amd64.AppImage`をダウンロード
+1. [リリースページ](https://github.com/YamadaUdon/UdonDrop/releases)から最新版の`UdonDrop_x.x.x_amd64.AppImage`をダウンロード
 2. ダウンロードしたファイルに実行権限を付与：`chmod +x UdonDrop_x.x.x_amd64.AppImage`
 3. ダブルクリックで起動
 

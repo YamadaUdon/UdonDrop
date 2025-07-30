@@ -19,6 +19,8 @@ interface CustomNodeData {
   groupId?: string;
   databaseName?: string;
   urlLink?: string;
+  isReconnectTarget?: boolean;
+  onReconnect?: () => void;
 }
 
 interface CustomNodeProps extends NodeProps<CustomNodeData> {
@@ -155,8 +157,18 @@ const CustomNode: FC<CustomNodeProps> = ({ data, selected, isEditing, type }) =>
     background: '#FF6B35', // Orange for output/source
   };
 
+  const handleNodeClick = (e: React.MouseEvent) => {
+    if (data.isReconnectTarget && data.onReconnect) {
+      e.stopPropagation();
+      data.onReconnect();
+    }
+  };
+
   return (
-    <div style={nodeStyle}>
+    <div 
+      style={nodeStyle}
+      onClick={handleNodeClick}
+    >
       {/* Top Handle - Input */}
       <Handle
         type="target"
@@ -316,6 +328,32 @@ const CustomNode: FC<CustomNodeProps> = ({ data, selected, isEditing, type }) =>
           maxWidth: '60px',
         }} title={`Group: ${nodeGroup.name}`}>
           {nodeGroup.name.charAt(0).toUpperCase()}
+        </div>
+      )}
+      
+      {/* Reconnection target indicator */}
+      {data.isReconnectTarget && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          backgroundColor: `${theme.colors.accent}20`,
+          border: `2px dashed ${theme.colors.accent}`,
+          borderRadius: '50%',
+          width: '40px',
+          height: '40px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '18px',
+          color: theme.colors.accent,
+          fontWeight: 'bold',
+          zIndex: 1000,
+          animation: 'pulse 2s infinite',
+          cursor: 'pointer',
+        }}>
+          🎯
         </div>
       )}
     </div>

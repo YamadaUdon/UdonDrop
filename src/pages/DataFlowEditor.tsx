@@ -28,6 +28,7 @@ import { isTauri } from '../utils/platform';
 import Sidebar from '../components/Sidebar';
 import CustomNode from '../components/CustomNode';
 import PropertiesPanel from '../components/PropertiesPanel';
+import EdgePropertiesPanel from '../components/EdgePropertiesPanel';
 import MenuBar from '../components/MenuBar';
 import GroupManagerPanel from '../components/GroupManagerPanel';
 import { usePipeline } from '../hooks/usePipeline';
@@ -77,9 +78,18 @@ function DataFlowEditorInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(getInitialEdges());
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [reconnectingEdge, setReconnectingEdge] = useState<{
+    edge: Edge;
+    mode: 'source' | 'target';
+  } | null>(null);
   const [showOnlyRelated, setShowOnlyRelated] = useState(false);
-  const [lineageMode, setLineageMode] = useState<'none' | 'upstream' | 'downstream' | 'both'>('none');
+  const [showUpstream, setShowUpstream] = useState(true);
+  const [showDownstream, setShowDownstream] = useState(true);
+  const [lineageMode, setLineageMode] = useState<'none' | 'impact' | 'dependency' | 'path' | 'critical'>('none');
+  const [persistedAnalysisNodes, setPersistedAnalysisNodes] = useState<Set<string>>(new Set());
+  const [persistedAnalysisMode, setPersistedAnalysisMode] = useState<'none' | 'impact' | 'dependency' | 'path' | 'critical'>('none');
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,11 +98,63 @@ function DataFlowEditorInner() {
   const { isDark } = useTheme();
   const theme = getTheme(isDark);
 
-  // Apply theme CSS variables for React Flow selection box
+
+  // Apply theme CSS variables for React Flow selection box and add animations
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--rf-selection-bg', theme.colors.accent + '20'); // Semi-transparent accent color
     root.style.setProperty('--rf-selection-border', theme.colors.accent);
+    
+    // Add minimal CSS for better performance
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = `
+      .react-flow__node {
+        transition: box-shadow 0.2s ease, border 0.2s ease;
+      }
+      
+      .react-flow__node:hover {
+        filter: brightness(1.05);
+      }
+      
+      .react-flow__edge:hover {
+        filter: brightness(1.1);
+      }
+      
+      .react-flow__node.dragging {
+        transition: none !important;
+      }
+      
+      @keyframes pulse {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: translate(-50%, -50%) scale(1.1);
+          opacity: 0.8;
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
+      }
+    `;
+    
+    // Remove existing style if it exists
+    const existingStyle = document.getElementById('dataflow-animations');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+    
+    styleSheet.id = 'dataflow-animations';
+    document.head.appendChild(styleSheet);
+    
+    return () => {
+      const style = document.getElementById('dataflow-animations');
+      if (style) {
+        style.remove();
+      }
+    };
   }, [theme]);
 
   // Search functionality
@@ -231,8 +293,9 @@ function DataFlowEditorInner() {
           label: 'Data Flow',
         },
         style: {
-          stroke: '#b1b1b7',
+          stroke: '#2563eb',
           strokeWidth: 2,
+          strokeOpacity: 0.7,
         },
       };
       setEdges((eds) => addEdge(newEdge, eds));
@@ -297,18 +360,75 @@ function DataFlowEditorInner() {
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
+    setSelectedEdge(null);
+    setReconnectingEdge(null);
+  }, []);
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.stopPropagation();
+    setSelectedEdge(edge);
+    setSelectedNode(null);
+    setReconnectingEdge(null);
   }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
+    setSelectedEdge(null);
+    setReconnectingEdge(null);
   }, []);
 
   // Custom mouse event handler for more precise control (removed - React Flow handles this internally)
 
   const onPropertiesPanelClose = useCallback(() => {
     setSelectedNode(null);
+    setSelectedEdge(null);
     setEditingNodeId(null);
+    setReconnectingEdge(null);
   }, []);
+
+  const startEdgeReconnection = useCallback((edge: Edge, mode: 'source' | 'target') => {
+    setReconnectingEdge({ edge, mode });
+    setSelectedEdge(null);
+  }, []);
+
+  const handleEdgeReconnection = useCallback((targetNodeId: string) => {
+    if (!reconnectingEdge) return;
+
+    const { edge, mode } = reconnectingEdge;
+    
+    // Prevent self-connection
+    if (mode === 'source' && targetNodeId === edge.target) return;
+    if (mode === 'target' && targetNodeId === edge.source) return;
+    
+    // Check for duplicate connections
+    const isDuplicate = edges.some(e => 
+      e.id !== edge.id && 
+      e.source === (mode === 'source' ? targetNodeId : edge.source) &&
+      e.target === (mode === 'target' ? targetNodeId : edge.target)
+    );
+    
+    if (isDuplicate) {
+      alert(t('edge.duplicateConnection'));
+      return;
+    }
+
+    const updatedEdge = {
+      ...edge,
+      [mode]: targetNodeId,
+    };
+
+    setEdges(eds => eds.map(e => e.id === edge.id ? updatedEdge : e));
+    setReconnectingEdge(null);
+  }, [reconnectingEdge, edges, setEdges, t]);
+
+  const cancelEdgeReconnection = useCallback(() => {
+    setReconnectingEdge(null);
+  }, []);
+
+
+  const onEdgeDelete = useCallback((edgeId: string) => {
+    setEdges(eds => eds.filter(edge => edge.id !== edgeId));
+  }, [setEdges]);
 
   const onNodeUpdate = useCallback(
     (nodeId: string, data: any) => {
@@ -366,14 +486,22 @@ function DataFlowEditorInner() {
   );
 
   const handleNew = useCallback(() => {
+    // Show confirmation dialog if there are existing nodes
+    if (nodes.length > 0 || edges.length > 0) {
+      const confirmed = window.confirm(t('alerts.confirmNew'));
+      if (!confirmed) {
+        return;
+      }
+    }
+    
     setNodes([]);
     setEdges([]);
     setSelectedNode(null);
-    setShowOnlyRelated(false);
+    setSelectedGroupIds(new Set());
     // Clear localStorage as well
     localStorage.removeItem('dataflow_editor_nodes');
     localStorage.removeItem('dataflow_editor_edges');
-  }, [setNodes, setEdges]);
+  }, [nodes, edges, setNodes, setEdges, t]);
 
   // Export functions
   const handleExportPNG = useCallback(async () => {
@@ -536,11 +664,7 @@ function DataFlowEditorInner() {
       setNodes([]);
       setEdges([]);
       setSelectedNode(null);
-      setShowOnlyRelated(false);
-      setLineageMode('none');
       setSelectedGroupIds(new Set());
-      
-      // With UUID-based IDs, no need to adjust counters - each ID is globally unique
       
       // Import nodes and edges
       setNodes(jsonData.nodes);
@@ -566,225 +690,617 @@ function DataFlowEditorInner() {
     }
   }, [setNodes, setEdges]);
 
-  // Auto-layout function
+  // Enhanced Auto-layout function with improved algorithm
   const handleAutoLayout = useCallback(() => {
     if (nodes.length === 0) return;
 
-    // Organize nodes by layers based on connections
-    const layers: Node[][] = [];
-    const visited = new Set<string>();
     const nodeMap = new Map(nodes.map(node => [node.id, node]));
-
-    // Find input nodes (nodes with no incoming edges)
-    const inputNodes = nodes.filter(node => 
-      !edges.some(edge => edge.target === node.id)
-    );
-
-    if (inputNodes.length === 0) {
-      // If no clear input nodes, start with data architecture nodes
-      const architectureNodes = nodes.filter(node => 
-        ['data_lake', 'data_warehouse', 'data_mart', 'bi_tool'].includes(node.type)
-      );
-      if (architectureNodes.length > 0) {
-        inputNodes.push(...architectureNodes);
-      } else {
-        inputNodes.push(nodes[0]); // Fallback to first node
-      }
-    }
-
-    let currentLayer = inputNodes;
     
-    while (currentLayer.length > 0) {
-      layers.push([...currentLayer]);
-      currentLayer.forEach(node => visited.add(node.id));
+    // Node type priorities for better layer organization
+    const nodeTypePriorities = {
+      // Data sources (highest priority - leftmost)
+      'data_lake': 1,
+      'data_warehouse': 1,
+      'csv_input': 2,
+      'json_input': 2,
+      'parquet_input': 2,
+      'database_input': 2,
+      'api_input': 2,
       
-      // Find next layer nodes
-      const nextLayer = new Set<Node>();
-      currentLayer.forEach(node => {
-        edges
-          .filter(edge => edge.source === node.id)
-          .forEach(edge => {
-            const targetNode = nodeMap.get(edge.target);
-            if (targetNode && !visited.has(targetNode.id)) {
-              // Check if all dependencies are satisfied
-              const dependencies = edges
-                .filter(e => e.target === targetNode.id)
-                .map(e => e.source);
-              
-              if (dependencies.every(dep => visited.has(dep))) {
-                nextLayer.add(targetNode);
-              }
-            }
-          });
+      // Processing nodes (middle priority)
+      'process': 5,
+      'transform': 5,
+      'filter': 5,
+      'aggregate': 6,
+      'join': 6,
+      'split': 6,
+      
+      // ML/AI nodes
+      'model_train': 7,
+      'model_predict': 8,
+      'model_evaluate': 8,
+      
+      // Data marts and outputs (lowest priority - rightmost)
+      'data_mart': 9,
+      'csv_output': 10,
+      'json_output': 10,
+      'parquet_output': 10,
+      'database_output': 10,
+      'api_output': 10,
+      'bi_tool': 11,
+    };
+    
+    // Calculate node depths using topological sort
+    const calculateNodeDepths = () => {
+      const depths = new Map<string, number>();
+      const inDegree = new Map<string, number>();
+      const adjList = new Map<string, string[]>();
+      
+      // Initialize
+      nodes.forEach(node => {
+        inDegree.set(node.id, 0);
+        adjList.set(node.id, []);
+        depths.set(node.id, 0);
       });
       
-      currentLayer = Array.from(nextLayer);
-    }
-
-    // Add any remaining unvisited nodes to the last layer
-    const unvisitedNodes = nodes.filter(node => !visited.has(node.id));
-    if (unvisitedNodes.length > 0) {
-      layers.push(unvisitedNodes);
-    }
-
-    // Calculate positions (vertical layout: top to bottom)
-    const layerHeight = 120; // Vertical spacing between layers
-    const nodeWidth = 180; // Horizontal spacing between nodes in same layer
-    const nodeSpacing = 30; // Spacing between nodes in same layer
+      // Build adjacency list and calculate in-degrees
+      edges.forEach(edge => {
+        adjList.get(edge.source)?.push(edge.target);
+        inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+      });
+      
+      // Find starting nodes (no incoming edges)
+      const queue: string[] = [];
+      nodes.forEach(node => {
+        if (inDegree.get(node.id) === 0) {
+          queue.push(node.id);
+          // Consider node type priority for initial depth
+          const typePriority = nodeTypePriorities[node.type as keyof typeof nodeTypePriorities] || 5;
+          depths.set(node.id, Math.max(0, typePriority - 3));
+        }
+      });
+      
+      // Process queue
+      while (queue.length > 0) {
+        const currentId = queue.shift()!;
+        const currentDepth = depths.get(currentId) || 0;
+        
+        adjList.get(currentId)?.forEach(neighborId => {
+          const newDepth = currentDepth + 1;
+          depths.set(neighborId, Math.max(depths.get(neighborId) || 0, newDepth));
+          
+          inDegree.set(neighborId, (inDegree.get(neighborId) || 0) - 1);
+          if (inDegree.get(neighborId) === 0) {
+            queue.push(neighborId);
+          }
+        });
+      }
+      
+      return depths;
+    };
     
+    const nodeDepths = calculateNodeDepths();
+    
+    // Group nodes by depth (layers)
+    const layers = new Map<number, Node[]>();
+    const maxDepth = Math.max(...Array.from(nodeDepths.values()));
+    
+    nodes.forEach(node => {
+      const depth = nodeDepths.get(node.id) || 0;
+      if (!layers.has(depth)) {
+        layers.set(depth, []);
+      }
+      layers.get(depth)!.push(node);
+    });
+    
+    // Sort nodes within each layer by type priority and then by connections
+    layers.forEach((layerNodes, depth) => {
+      layerNodes.sort((a, b) => {
+        // First by type priority
+        const aPriority = nodeTypePriorities[a.type as keyof typeof nodeTypePriorities] || 5;
+        const bPriority = nodeTypePriorities[b.type as keyof typeof nodeTypePriorities] || 5;
+        if (aPriority !== bPriority) {
+          return aPriority - bPriority;
+        }
+        
+        // Then by number of connections (more connected nodes in center)
+        const aConnections = edges.filter(e => e.source === a.id || e.target === a.id).length;
+        const bConnections = edges.filter(e => e.source === b.id || e.target === b.id).length;
+        return bConnections - aConnections;
+      });
+    });
+    
+    // Calculate optimal spacing
+    const baseNodeWidth = 200;
+    const baseNodeHeight = 80;
+    const minHorizontalSpacing = 60;
+    const minVerticalSpacing = 100;
+    
+    // Dynamic spacing based on layer size
+    const getLayerSpacing = (layerSize: number) => {
+      const availableWidth = Math.max(1200, window.innerWidth - 100);
+      const totalNodeWidth = layerSize * baseNodeWidth;
+      const totalSpacing = availableWidth - totalNodeWidth;
+      return Math.max(minHorizontalSpacing, totalSpacing / Math.max(1, layerSize - 1));
+    };
+    
+    // Position nodes
     const newNodes = nodes.map(node => {
-      const layerIndex = layers.findIndex(layer => layer.some(n => n.id === node.id));
-      const layer = layers[layerIndex];
+      const depth = nodeDepths.get(node.id) || 0;
+      const layer = layers.get(depth) || [];
       const nodeIndex = layer.findIndex(n => n.id === node.id);
-      const totalInLayer = layer.length;
+      const layerSize = layer.length;
       
-      // Calculate Y position (vertical layers)
-      const y = layerIndex * layerHeight + 50;
+      // Vertical position
+      const y = 80 + depth * (baseNodeHeight + minVerticalSpacing);
       
-      // Calculate X position (horizontal distribution within layer)
-      const totalWidth = totalInLayer * nodeWidth + (totalInLayer - 1) * nodeSpacing;
-      const startX = Math.max(50, (window.innerWidth - totalWidth) / 2);
-      const x = startX + nodeIndex * (nodeWidth + nodeSpacing);
+      // Horizontal position with improved centering
+      const horizontalSpacing = getLayerSpacing(layerSize);
+      const totalLayerWidth = (layerSize - 1) * horizontalSpacing + layerSize * baseNodeWidth;
+      const startX = Math.max(50, (Math.max(1200, window.innerWidth - 100) - totalLayerWidth) / 2);
+      const x = startX + nodeIndex * (baseNodeWidth + horizontalSpacing);
       
       return {
         ...node,
         position: { x, y },
       };
     });
-
-    setNodes(newNodes);
+    
+    // Apply smooth animation by updating positions gradually
+    const animateLayout = (targetNodes: typeof newNodes, duration: number = 500) => {
+      const startTime = Date.now();
+      const initialPositions = nodes.map(node => ({ ...node.position }));
+      
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function (ease-out)
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        
+        const animatedNodes = nodes.map((node, index) => {
+          const target = targetNodes[index];
+          const initial = initialPositions[index];
+          
+          return {
+            ...node,
+            position: {
+              x: initial.x + (target.position.x - initial.x) * easeOut,
+              y: initial.y + (target.position.y - initial.y) * easeOut,
+            },
+          };
+        });
+        
+        setNodes(animatedNodes);
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        }
+      };
+      
+      requestAnimationFrame(animate);
+    };
+    
+    // Start animation
+    animateLayout(newNodes);
   }, [nodes, edges, setNodes]);
 
   // Get related nodes for a given node with lineage options
-  const getRelatedNodes = useCallback((nodeId: string, currentNodes: Node[], currentEdges: Edge[]) => {
+  const getRelatedNodes = useCallback((nodeId: string, currentNodes: Node[], currentEdges: Edge[], includeUpstream: boolean, includeDownstream: boolean) => {
     const relatedNodeIds = new Set<string>();
     relatedNodeIds.add(nodeId);
     
-    // Find all connected nodes (both upstream and downstream)
-    const findConnectedNodes = (targetNodeId: string, visited: Set<string>) => {
-      if (visited.has(targetNodeId)) return;
-      visited.add(targetNodeId);
-      
-      currentEdges.forEach(edge => {
-        if (edge.source === targetNodeId && !visited.has(edge.target)) {
-          relatedNodeIds.add(edge.target);
-          findConnectedNodes(edge.target, visited);
-        }
-        if (edge.target === targetNodeId && !visited.has(edge.source)) {
-          relatedNodeIds.add(edge.source);
-          findConnectedNodes(edge.source, visited);
-        }
-      });
-    };
-    
-    findConnectedNodes(nodeId, new Set());
-    return relatedNodeIds;
-  }, []);
-
-  // Get lineage nodes (upstream/downstream)
-  const getLineageNodes = useCallback((nodeId: string, mode: 'upstream' | 'downstream' | 'both') => {
-    const lineageNodeIds = new Set<string>();
-    lineageNodeIds.add(nodeId);
-
-    if (mode === 'upstream' || mode === 'both') {
-      // Find upstream nodes (data sources)
-      const findUpstream = (targetNodeId: string, visited: Set<string>) => {
+    // Find upstream nodes (only follow input connections)
+    if (includeUpstream) {
+      const findUpstreamNodes = (targetNodeId: string, visited: Set<string>) => {
         if (visited.has(targetNodeId)) return;
         visited.add(targetNodeId);
         
-        edges.forEach(edge => {
+        currentEdges.forEach(edge => {
+          // Only follow edges where current node is the target (receiving data)
           if (edge.target === targetNodeId && !visited.has(edge.source)) {
-            lineageNodeIds.add(edge.source);
-            findUpstream(edge.source, visited);
+            relatedNodeIds.add(edge.source);
+            // Recursively find upstream nodes of this source node
+            findUpstreamNodes(edge.source, visited);
           }
         });
       };
-      findUpstream(nodeId, new Set());
+      findUpstreamNodes(nodeId, new Set());
     }
+    
+    // Find downstream nodes (only follow output connections)
+    if (includeDownstream) {
+      const findDownstreamNodes = (sourceNodeId: string, visited: Set<string>) => {
+        if (visited.has(sourceNodeId)) return;
+        visited.add(sourceNodeId);
+        
+        currentEdges.forEach(edge => {
+          // Only follow edges where current node is the source (sending data)
+          if (edge.source === sourceNodeId && !visited.has(edge.target)) {
+            relatedNodeIds.add(edge.target);
+            // Recursively find downstream nodes of this target node
+            findDownstreamNodes(edge.target, visited);
+          }
+        });
+      };
+      findDownstreamNodes(nodeId, new Set());
+    }
+    
+    return relatedNodeIds;
+  }, []);
 
-    if (mode === 'downstream' || mode === 'both') {
-      // Find downstream nodes (data consumers)
-      const findDownstream = (sourceNodeId: string, visited: Set<string>) => {
+  // Enhanced lineage analysis with practical use cases
+  const getLineageNodes = useCallback((nodeId: string, mode: 'none' | 'impact' | 'dependency' | 'path' | 'critical') => {
+    if (mode === 'none') return new Set<string>();
+    const lineageNodeIds = new Set<string>();
+    lineageNodeIds.add(nodeId);
+    
+    if (mode === 'impact') {
+      // Impact Analysis: Show all nodes that would be affected if this node fails
+      const findImpactedNodes = (sourceNodeId: string, visited: Set<string>) => {
         if (visited.has(sourceNodeId)) return;
         visited.add(sourceNodeId);
         
         edges.forEach(edge => {
           if (edge.source === sourceNodeId && !visited.has(edge.target)) {
             lineageNodeIds.add(edge.target);
+            findImpactedNodes(edge.target, visited);
+          }
+        });
+      };
+      findImpactedNodes(nodeId, new Set());
+    }
+    
+    else if (mode === 'dependency') {
+      // Dependency Analysis: Show all nodes this node depends on
+      const findDependencies = (targetNodeId: string, visited: Set<string>) => {
+        if (visited.has(targetNodeId)) return;
+        visited.add(targetNodeId);
+        
+        edges.forEach(edge => {
+          if (edge.target === targetNodeId && !visited.has(edge.source)) {
+            lineageNodeIds.add(edge.source);
+            findDependencies(edge.source, visited);
+          }
+        });
+      };
+      findDependencies(nodeId, new Set());
+    }
+    
+    else if (mode === 'path') {
+      // End-to-End Path: Show complete data flow paths through this node
+      // Find all paths that pass through the selected node
+      const pathNodes = new Set<string>();
+      
+      // First, check if selected node is a source or sink itself
+      const isSource = !edges.some(edge => edge.target === nodeId);
+      const isSink = !edges.some(edge => edge.source === nodeId);
+      
+      if (isSource) {
+        // If it's a source, find all downstream nodes
+        const findDownstream = (current: string, visited: Set<string>) => {
+          if (visited.has(current)) return;
+          visited.add(current);
+          pathNodes.add(current);
+          
+          edges.forEach(edge => {
+            if (edge.source === current) {
+              findDownstream(edge.target, visited);
+            }
+          });
+        };
+        findDownstream(nodeId, new Set());
+      } else if (isSink) {
+        // If it's a sink, find all upstream nodes
+        const findUpstream = (current: string, visited: Set<string>) => {
+          if (visited.has(current)) return;
+          visited.add(current);
+          pathNodes.add(current);
+          
+          edges.forEach(edge => {
+            if (edge.target === current) {
+              findUpstream(edge.source, visited);
+            }
+          });
+        };
+        findUpstream(nodeId, new Set());
+      } else {
+        // For intermediate nodes, find all paths passing through it
+        // First find all upstream sources that can reach this node
+        const upstreamSources = new Set<string>();
+        const findUpstreamSources = (current: string, visited: Set<string>) => {
+          if (visited.has(current)) return;
+          visited.add(current);
+          
+          const incoming = edges.filter(e => e.target === current);
+          if (incoming.length === 0) {
+            // This is a source node
+            upstreamSources.add(current);
+          } else {
+            incoming.forEach(edge => {
+              findUpstreamSources(edge.source, visited);
+            });
+          }
+        };
+        findUpstreamSources(nodeId, new Set());
+        
+        // Then find all downstream sinks reachable from this node
+        const downstreamSinks = new Set<string>();
+        const findDownstreamSinks = (current: string, visited: Set<string>) => {
+          if (visited.has(current)) return;
+          visited.add(current);
+          
+          const outgoing = edges.filter(e => e.source === current);
+          if (outgoing.length === 0) {
+            // This is a sink node
+            downstreamSinks.add(current);
+          } else {
+            outgoing.forEach(edge => {
+              findDownstreamSinks(edge.target, visited);
+            });
+          }
+        };
+        findDownstreamSinks(nodeId, new Set());
+        
+        // Now find paths from sources to sinks that pass through the selected node
+        upstreamSources.forEach(sourceId => {
+          downstreamSinks.forEach(sinkId => {
+            // Check if there's a path from source to selected node and from selected node to sink
+            const pathFromSource = new Set<string>();
+            const canReachFromSource = (current: string, target: string, visited: Set<string>): boolean => {
+              if (current === target) {
+                pathFromSource.add(current);
+                return true;
+              }
+              if (visited.has(current)) return false;
+              visited.add(current);
+              
+              const outgoing = edges.filter(e => e.source === current);
+              for (const edge of outgoing) {
+                if (canReachFromSource(edge.target, target, visited)) {
+                  pathFromSource.add(current);
+                  return true;
+                }
+              }
+              return false;
+            };
+            
+            const pathToSink = new Set<string>();
+            const canReachToSink = (current: string, target: string, visited: Set<string>): boolean => {
+              if (current === target) {
+                pathToSink.add(current);
+                return true;
+              }
+              if (visited.has(current)) return false;
+              visited.add(current);
+              
+              const outgoing = edges.filter(e => e.source === current);
+              for (const edge of outgoing) {
+                if (canReachToSink(edge.target, target, visited)) {
+                  pathToSink.add(current);
+                  return true;
+                }
+              }
+              return false;
+            };
+            
+            if (canReachFromSource(sourceId, nodeId, new Set()) && 
+                canReachToSink(nodeId, sinkId, new Set())) {
+              // Add all nodes in the complete path
+              pathFromSource.forEach(node => pathNodes.add(node));
+              pathToSink.forEach(node => pathNodes.add(node));
+            }
+          });
+        });
+      }
+      
+      // Add all found path nodes to lineageNodeIds
+      pathNodes.forEach(node => lineageNodeIds.add(node));
+    }
+    
+    else if (mode === 'critical') {
+      // Critical Path Analysis: Show critical nodes in the data flow connected to selected node
+      // First, find all nodes connected to the selected node (upstream and downstream)
+      const connectedNodes = new Set<string>();
+      connectedNodes.add(nodeId);
+      
+      // Find all upstream nodes
+      const findUpstream = (targetId: string, visited: Set<string>) => {
+        if (visited.has(targetId)) return;
+        visited.add(targetId);
+        
+        edges.forEach(edge => {
+          if (edge.target === targetId && !visited.has(edge.source)) {
+            connectedNodes.add(edge.source);
+            findUpstream(edge.source, visited);
+          }
+        });
+      };
+      findUpstream(nodeId, new Set());
+      
+      // Find all downstream nodes
+      const findDownstream = (sourceId: string, visited: Set<string>) => {
+        if (visited.has(sourceId)) return;
+        visited.add(sourceId);
+        
+        edges.forEach(edge => {
+          if (edge.source === sourceId && !visited.has(edge.target)) {
+            connectedNodes.add(edge.target);
             findDownstream(edge.target, visited);
           }
         });
       };
       findDownstream(nodeId, new Set());
+      
+      // Now identify critical nodes within the connected subgraph
+      connectedNodes.forEach(nodeId => {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+        
+        // Count connections only within the connected subgraph
+        const incomingCount = edges.filter(e => 
+          e.target === node.id && connectedNodes.has(e.source)
+        ).length;
+        const outgoingCount = edges.filter(e => 
+          e.source === node.id && connectedNodes.has(e.target)
+        ).length;
+        
+        // Consider nodes with high connectivity as critical
+        if (incomingCount >= 2 || outgoingCount >= 2) {
+          lineageNodeIds.add(node.id);
+        }
+        
+        // ML/AI nodes are often critical
+        if (['model_train', 'model_predict', 'model_evaluate'].includes(node.type)) {
+          lineageNodeIds.add(node.id);
+        }
+        
+        // Central processing nodes with connections
+        if (['join', 'aggregate', 'transform'].includes(node.type) && 
+            (incomingCount > 0 || outgoingCount > 0)) {
+          lineageNodeIds.add(node.id);
+        }
+        
+        // Add bottleneck nodes (single connection point between subgraphs)
+        if (incomingCount === 1 && outgoingCount >= 1) {
+          // Check if removing this node would disconnect the graph
+          const upstreamNodes = edges
+            .filter(e => e.target === node.id && connectedNodes.has(e.source))
+            .map(e => e.source);
+          const downstreamNodes = edges
+            .filter(e => e.source === node.id && connectedNodes.has(e.target))
+            .map(e => e.target);
+          
+          // If this is the only connection between upstream and downstream, it's critical
+          const alternativePaths = edges.filter(e => 
+            upstreamNodes.includes(e.source) && 
+            downstreamNodes.includes(e.target) && 
+            e.source !== node.id && 
+            e.target !== node.id
+          ).length;
+          
+          if (alternativePaths === 0) {
+            lineageNodeIds.add(node.id);
+          }
+        }
+      });
     }
-
-    return lineageNodeIds;
-  }, [edges]);
-
-  // Filter nodes and edges based on showOnlyRelated, group filter, and lineage modes
-  const { displayNodes, displayEdges } = useMemo(() => {
-    let processedNodes = nodes;
-    let processedEdges = edges;
     
-    // Add editing state information and search highlighting to all nodes
-    processedNodes = nodes.map(node => {
+    return lineageNodeIds;
+  }, [nodes, edges]);
+
+  // Safe filter for nodes and edges with related nodes functionality
+  const { displayNodes, displayEdges } = useMemo(() => {
+    // Basic node processing with search highlighting
+    const processedNodes = nodes.map(node => {
       const isSearchMatch = searchResults.has(node.id);
+      const isSelected = node.selected;
+      const isReconnectTarget = reconnectingEdge && 
+        ((reconnectingEdge.mode === 'source' && node.id !== reconnectingEdge.edge.target) ||
+         (reconnectingEdge.mode === 'target' && node.id !== reconnectingEdge.edge.source));
+      
       return {
         ...node,
         data: {
           ...node.data,
           isEditing: editingNodeId === node.id,
+          isReconnectTarget,
+          onReconnect: isReconnectTarget ? () => handleEdgeReconnection(node.id) : undefined,
         },
         style: {
           ...node.style,
           ...(isSearchMatch && {
-            boxShadow: `0 0 15px ${theme.colors.warning}`,
+            boxShadow: `0 0 12px ${theme.colors.warning}60`,
             border: `2px solid ${theme.colors.warning}`,
             zIndex: 99995,
-          })
+          }),
+          ...(isSelected && {
+            opacity: 1,
+            zIndex: 1000,
+          }),
+          ...(isReconnectTarget && {
+            border: `3px dashed ${theme.colors.accent}`,
+            boxShadow: `0 0 15px ${theme.colors.accent}50`,
+            cursor: 'pointer',
+            zIndex: 99994,
+          }),
         }
       };
     });
 
-    // Get selected nodes for edge styling
-    const selectedNodes = processedNodes.filter(node => node.selected);
-    const selectedNodeIds = new Set(selectedNodes.map(node => node.id));
-
-    // Process edges to add transfer type styles and selection highlighting
-    processedEdges = edges.map(edge => {
+    // Enhanced edge processing with sophisticated visual effects
+    const processedEdges = edges.map(edge => {
       const transferType = edge.data?.transferType || 'batch';
+      const selectedNodes = processedNodes.filter(node => node.selected);
+      const selectedNodeIds = new Set(selectedNodes.map(node => node.id));
       const isConnectedToSelected = selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target);
-      const isEdgeSelected = edge.selected || false; // Check if edge itself is selected
+      const isEdgeSelected = edge.selected || (selectedEdge && selectedEdge.id === edge.id);
+      const isReconnectingThisEdge = reconnectingEdge && reconnectingEdge.edge.id === edge.id;
       
-      // Check if this edge is outgoing or incoming from selected node
-      const isOutgoingFromSelected = selectedNodeIds.has(edge.source);
-      const isIncomingToSelected = selectedNodeIds.has(edge.target);
+      let strokeColor = '#64748b'; // Darker slate gray for better visibility
+      let strokeWidth = 2;
+      let strokeOpacity = 0.8;
+      let strokeDasharray = undefined;
+      let animated = false;
+      let style = {};
       
-      // Determine edge color based on selection and transfer type
-      // Color scheme:
-      // - Outgoing (data flowing out): Orange/Green
-      // - Incoming (data flowing in): Purple/Blue
-      let strokeColor = '#b1b1b7'; // Default gray
-      let strokeWidth = 2; // Default width
-      
-      if (isEdgeSelected) {
-        // Edge itself is selected - use darker/more saturated colors
-        strokeColor = transferType === 'realtime' ? '#2E7D32' : '#D32F2F'; // Dark green for realtime, dark red for batch
-        strokeWidth = 4; // Thickest for selected edge
+      if (isReconnectingThisEdge) {
+        // Edge being reconnected gets special styling
+        strokeColor = '#f59e0b'; // Orange for reconnection mode
+        strokeWidth = 6;
+        strokeOpacity = 1;
+        strokeDasharray = '15,5';
+        animated = true;
+        style = {
+          filter: `drop-shadow(0 0 12px ${strokeColor}60)`,
+        };
+      } else if (isEdgeSelected) {
+        // Selected edge gets maximum emphasis
+        strokeColor = transferType === 'realtime' ? '#10b981' : '#3b82f6';
+        strokeWidth = 5;
+        strokeOpacity = 1;
+        animated = true;
+        style = {
+          filter: `drop-shadow(0 0 8px ${strokeColor}40)`,
+        };
       } else if (isConnectedToSelected) {
-        // Connected to selected node - differentiate by direction
+        const isOutgoingFromSelected = selectedNodeIds.has(edge.source);
+        strokeWidth = 4;
+        strokeOpacity = 0.9;
+        
         if (isOutgoingFromSelected) {
-          // Outgoing from selected node (data flowing out) - warm colors
-          strokeColor = transferType === 'realtime' ? '#4CAF50' : '#FF6B35'; // Orange for batch, green for realtime
-        } else if (isIncomingToSelected) {
-          // Incoming to selected node (data flowing in) - cool colors
-          strokeColor = transferType === 'realtime' ? '#2196F3' : '#9C27B0'; // Purple for batch, blue for realtime
+          // Outgoing edges (data flowing out) - warm gradient colors
+          if (transferType === 'realtime') {
+            strokeColor = '#10b981'; // Emerald green
+            animated = true;
+          } else {
+            strokeColor = '#f97316'; // Orange
+            strokeDasharray = '8,4';
+          }
+        } else {
+          // Incoming edges (data flowing in) - cool gradient colors  
+          if (transferType === 'realtime') {
+            strokeColor = '#3b82f6'; // Blue
+            animated = true;
+          } else {
+            strokeColor = '#8b5cf6'; // Purple
+            strokeDasharray = '8,4';
+          }
         }
-        strokeWidth = 3;
+        
+        style = {
+          filter: `drop-shadow(0 0 6px ${strokeColor}30)`,
+        };
       } else {
-        // Normal state
-        strokeColor = transferType === 'realtime' ? '#4CAF50' : '#2196F3'; // Blue for normal batch, green for realtime
-        strokeWidth = 2;
+        // Normal state with better visibility
+        strokeOpacity = 0.6;
+        if (transferType === 'realtime') {
+          strokeColor = '#059669'; // Subtle green for realtime
+          strokeDasharray = '3,2';
+        } else {
+          strokeColor = '#2563eb'; // Subtle blue for batch
+          strokeDasharray = '5,3';
+        }
       }
       
       return {
@@ -793,121 +1309,170 @@ function DataFlowEditorInner() {
           ...edge.style,
           stroke: strokeColor,
           strokeWidth: strokeWidth,
-          strokeDasharray: transferType === 'realtime' ? undefined : '5,5',
+          strokeOpacity: strokeOpacity,
+          strokeDasharray: strokeDasharray,
+          ...style,
         },
-        animated: transferType === 'realtime',
+        animated: animated,
       };
     });
 
-    // If group filter is active, return only group filtered nodes - ignore selection
+    // Group filter takes priority
     if (selectedGroupIds.size > 0) {
-      const groupFilteredNodes = processedNodes.filter(node => {
-        // Only show nodes that belong to selected groups (hide ungrouped nodes)
-        return node.data.groupId && selectedGroupIds.has(node.data.groupId);
-      });
-      
+      const groupFilteredNodes = processedNodes.filter(node => 
+        node.data.groupId && selectedGroupIds.has(node.data.groupId)
+      );
       const groupFilteredEdges = processedEdges.filter(edge => 
         groupFilteredNodes.some(node => node.id === edge.source) && 
         groupFilteredNodes.some(node => node.id === edge.target)
       );
-      
       return { displayNodes: groupFilteredNodes, displayEdges: groupFilteredEdges };
     }
     
-    // If no group filter and no other filters, return all nodes
-    if (!showOnlyRelated && lineageMode === 'none') {
-      return { displayNodes: processedNodes, displayEdges: processedEdges };
-    }
+    // Related nodes and analysis filter
+    const selectedNodes = processedNodes.filter(node => node.selected);
+    const hasSelection = selectedNodes.length > 0;
+    const hasAnalysisMode = lineageMode !== 'none';
     
-    const selectedNodesForFiltering = processedNodes.filter(node => node.selected);
-    if (selectedNodesForFiltering.length === 0 && lineageMode === 'none') {
-      return { displayNodes: processedNodes, displayEdges: processedEdges };
-    }
-    
-    // Get all related nodes for all selected nodes
-    const allRelatedNodeIds = new Set<string>();
-    
-    if (showOnlyRelated) {
-      selectedNodesForFiltering.forEach(selectedNode => {
-        const relatedIds = getRelatedNodes(selectedNode.id, processedNodes, processedEdges);
-        relatedIds.forEach(id => allRelatedNodeIds.add(id));
-      });
-    }
-    
-    // Add lineage nodes if lineage mode is active
-    if (lineageMode !== 'none' && selectedNodesForFiltering.length > 0) {
-      selectedNodesForFiltering.forEach(selectedNode => {
-        const lineageIds = getLineageNodes(selectedNode.id, lineageMode);
-        lineageIds.forEach(id => allRelatedNodeIds.add(id));
-      });
-    }
-    
-    // If no filters are active, show all nodes
-    if (allRelatedNodeIds.size === 0) {
-      selectedNodesForFiltering.forEach(node => allRelatedNodeIds.add(node.id));
-    }
-    
-    // Filter nodes and edges with visual emphasis
-    const filteredNodes = processedNodes.filter(node => allRelatedNodeIds.has(node.id)).map(node => {
-      const isSelected = selectedNodesForFiltering.some(selected => selected.id === node.id);
-      return {
-        ...node,
-        style: {
-          ...node.style,
-          opacity: isSelected ? 1 : 0.8,
-          filter: isSelected ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none',
-        }
-      };
-    });
-    
-    const filteredEdges = processedEdges.filter(edge => 
-      allRelatedNodeIds.has(edge.source) && allRelatedNodeIds.has(edge.target)
-    ).map(edge => {
-      const selectedNodeIdsForFiltering = new Set(selectedNodesForFiltering.map(node => node.id));
-      const isConnectedToSelected = selectedNodeIdsForFiltering.has(edge.source) || selectedNodeIdsForFiltering.has(edge.target);
-      const isEdgeSelected = edge.selected || false; // Check if edge itself is selected
-      const transferType = edge.data?.transferType || 'batch';
-      
-      // Check if this edge is outgoing or incoming from selected node
-      const isOutgoingFromSelected = selectedNodeIdsForFiltering.has(edge.source);
-      const isIncomingToSelected = selectedNodeIdsForFiltering.has(edge.target);
-      
-      // Determine edge color based on selection and transfer type
-      let strokeColor = '#b1b1b7'; // Default gray
-      let strokeWidth = 2; // Default width
-      
-      if (isEdgeSelected) {
-        // Edge itself is selected - use darker/more saturated colors
-        strokeColor = transferType === 'realtime' ? '#2E7D32' : '#D32F2F'; // Dark green for realtime, dark red for batch
-        strokeWidth = 4; // Thickest for selected edge
-      } else if (isConnectedToSelected) {
-        // Connected to selected node - differentiate by direction
-        if (isOutgoingFromSelected) {
-          // Outgoing from selected node (data flowing out)
-          strokeColor = transferType === 'realtime' ? '#4CAF50' : '#FF6B35'; // Orange for batch, green for realtime
-        } else if (isIncomingToSelected) {
-          // Incoming to selected node (data flowing in)
-          strokeColor = transferType === 'realtime' ? '#2196F3' : '#9C27B0'; // Purple for batch, blue for realtime
-        }
-        strokeWidth = 3;
-      } else {
-        // Normal state
-        strokeColor = transferType === 'realtime' ? '#4CAF50' : '#2196F3'; // Blue for normal batch, green for realtime
-        strokeWidth = 2;
+    if (showOnlyRelated || hasAnalysisMode) {
+      if (!hasSelection) {
+        return { displayNodes: processedNodes, displayEdges: processedEdges };
       }
       
-      return {
-        ...edge,
-        style: {
-          ...edge.style,
-          stroke: strokeColor,
-          strokeWidth: strokeWidth,
+      const allRelatedNodeIds = new Set<string>();
+      
+      // Add related nodes if showOnlyRelated is enabled
+      if (showOnlyRelated) {
+        selectedNodes.forEach(selectedNode => {
+          const relatedIds = getRelatedNodes(selectedNode.id, processedNodes, processedEdges, showUpstream, showDownstream);
+          relatedIds.forEach(id => allRelatedNodeIds.add(id));
+        });
+      }
+      
+      // Add lineage nodes if analysis mode is active
+      if (hasAnalysisMode) {
+        selectedNodes.forEach(selectedNode => {
+          try {
+            const lineageIds = getLineageNodes(selectedNode.id, lineageMode as 'impact' | 'dependency' | 'path' | 'critical');
+            lineageIds.forEach(id => allRelatedNodeIds.add(id));
+          } catch (error) {
+            console.error('Error calculating lineage for node:', selectedNode.id, error);
+          }
+        });
+      }
+      
+      // If no filters found any nodes, show selected nodes at minimum
+      if (allRelatedNodeIds.size === 0) {
+        selectedNodes.forEach(node => allRelatedNodeIds.add(node.id));
+      }
+      
+      const filteredNodes = processedNodes.filter(node => allRelatedNodeIds.has(node.id)).map(node => {
+        const isSelected = selectedNodes.some(selected => selected.id === node.id);
+        const isInAnalysis = hasAnalysisMode;
+        
+        if (isSelected) {
+          return node; // Already styled above
+        } else if (isInAnalysis) {
+          // Simple analysis styling
+          const analysisStyles = {
+            impact: {
+              border: '2px solid #ef4444',
+              boxShadow: '0 0 6px rgba(239, 68, 68, 0.3)',
+            },
+            dependency: {
+              border: '2px solid #22c55e',
+              boxShadow: '0 0 6px rgba(34, 197, 94, 0.3)',
+            },
+            path: {
+              border: '2px solid #a855f7',
+              boxShadow: '0 0 6px rgba(168, 85, 247, 0.3)',
+            },
+            critical: {
+              border: '2px solid #f59e0b',
+              boxShadow: '0 0 6px rgba(245, 158, 11, 0.3)',
+            },
+          };
+          
+          const currentStyle = analysisStyles[lineageMode as keyof typeof analysisStyles];
+          
+          return {
+            ...node,
+            style: {
+              ...node.style,
+              ...currentStyle,
+              opacity: 0.95,
+              zIndex: 500,
+            }
+          };
         }
-      };
-    });
+        
+        // Add subtle styling for non-selected, non-analysis nodes
+        return {
+          ...node,
+          style: {
+            ...node.style,
+            opacity: hasAnalysisMode || showOnlyRelated ? 0.6 : 1,
+          }
+        };
+      });
+      
+      const filteredEdges = processedEdges.filter(edge => 
+        allRelatedNodeIds.has(edge.source) && allRelatedNodeIds.has(edge.target)
+      ).map(edge => {
+        // Add analysis-specific edge styling
+        if (hasAnalysisMode) {
+          const analysisEdgeStyles = {
+            impact: {
+              stroke: '#ef4444',
+              strokeWidth: 4,
+              strokeOpacity: 0.8,
+              filter: 'drop-shadow(0 0 8px #ef444440)',
+              strokeDasharray: '10,3',
+            },
+            dependency: {
+              stroke: '#22c55e',
+              strokeWidth: 4,
+              strokeOpacity: 0.8,
+              filter: 'drop-shadow(0 0 8px #22c55e40)',
+              strokeDasharray: '10,3',
+            },
+            path: {
+              stroke: '#a855f7',
+              strokeWidth: 4,
+              strokeOpacity: 0.8,
+              filter: 'drop-shadow(0 0 8px #a855f740)',
+              strokeDasharray: '15,5',
+            },
+            critical: {
+              stroke: '#f59e0b',
+              strokeWidth: 5,
+              strokeOpacity: 0.9,
+              filter: 'drop-shadow(0 0 10px #f59e0b50)',
+              strokeDasharray: '8,4,2,4',
+            },
+          };
+          
+          const analysisStyle = analysisEdgeStyles[lineageMode as keyof typeof analysisEdgeStyles];
+          
+          return {
+            ...edge,
+            style: {
+              ...edge.style,
+              ...analysisStyle,
+            },
+            animated: lineageMode === 'path' || lineageMode === 'critical',
+          };
+        }
+        
+        return edge;
+      });
+      
+      return { displayNodes: filteredNodes, displayEdges: filteredEdges };
+    }
     
-    return { displayNodes: filteredNodes, displayEdges: filteredEdges };
-  }, [nodes, edges, showOnlyRelated, lineageMode, selectedGroupIds, editingNodeId, searchResults, theme, getRelatedNodes, getLineageNodes]);
+    // Return all nodes and edges
+    return { displayNodes: processedNodes, displayEdges: processedEdges };
+  }, [nodes, edges, selectedGroupIds, editingNodeId, searchResults, theme, showOnlyRelated, showUpstream, showDownstream, lineageMode, selectedEdge, reconnectingEdge, handleEdgeReconnection, getRelatedNodes, getLineageNodes]);
 
   // Toggle show only related nodes
   const toggleShowOnlyRelated = useCallback(() => {
@@ -928,9 +1493,15 @@ function DataFlowEditorInner() {
       // Delete selected nodes and edges with Delete key (only when not in input field)
       if ((event.key === 'Delete' || event.key === 'Backspace') && !isInputField) {
         const selectedNodes = nodes.filter(node => node.selected);
-        const selectedEdges = edges.filter(edge => edge.selected);
+        const selectedEdgesFromFlow = edges.filter(edge => edge.selected);
         
-        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+        // Also include the selected edge from the properties panel
+        const allSelectedEdges = selectedEdgesFromFlow.slice();
+        if (selectedEdge && !allSelectedEdges.some(e => e.id === selectedEdge.id)) {
+          allSelectedEdges.push(selectedEdge);
+        }
+        
+        if (selectedNodes.length > 0 || allSelectedEdges.length > 0) {
           // Prevent default to avoid any browser back navigation
           event.preventDefault();
           
@@ -952,9 +1523,14 @@ function DataFlowEditorInner() {
           }
           
           // Remove selected edges
-          if (selectedEdges.length > 0) {
-            const selectedEdgeIds = selectedEdges.map(edge => edge.id);
+          if (allSelectedEdges.length > 0) {
+            const selectedEdgeIds = allSelectedEdges.map(edge => edge.id);
             setEdges(eds => eds.filter(edge => !selectedEdgeIds.includes(edge.id)));
+            
+            // Clear selected edge in properties panel if it was deleted
+            if (selectedEdge && selectedEdgeIds.includes(selectedEdge.id)) {
+              setSelectedEdge(null);
+            }
           }
         }
       }
@@ -967,7 +1543,7 @@ function DataFlowEditorInner() {
         }
       }
     },
-    [nodes, edges, selectedNode, setNodes, setEdges, toggleShowOnlyRelated]
+    [nodes, edges, selectedNode, selectedEdge, setNodes, setEdges, toggleShowOnlyRelated]
   );
 
   // Add keyboard event listener
@@ -978,26 +1554,6 @@ function DataFlowEditorInner() {
     };
   }, [handleKeyDown]);
 
-  // SQL Generator function (kept for backward compatibility with any remaining references)
-  const handleSQLGenerate = useCallback((generatedNodes: Node[], generatedEdges: Edge[]) => {
-    // Apply auto-layout to generated nodes
-    const layoutNodes = generatedNodes.map((node, index) => ({
-      ...node,
-      position: {
-        x: 100 + (index % 4) * 250, // 4 columns
-        y: 100 + Math.floor(index / 4) * 150 // Multiple rows
-      }
-    }));
-    
-    // Add generated nodes and edges to existing ones
-    setNodes(prev => [...prev, ...layoutNodes]);
-    setEdges(prev => [...prev, ...generatedEdges]);
-    
-    // Show success message
-    setTimeout(() => {
-      alert(`Successfully generated ${generatedNodes.length} nodes and ${generatedEdges.length} edges from SQL query!`);
-    }, 100);
-  }, [setNodes, setEdges]);
 
   return (
     <div style={{ 
@@ -1032,6 +1588,8 @@ function DataFlowEditorInner() {
           display: 'flex',
           gap: '10px',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          maxWidth: 'calc(100vw - 320px)',
           background: `${theme.colors.surface}f0`,
           padding: '8px 12px',
           borderRadius: theme.borderRadius.md,
@@ -1113,6 +1671,50 @@ function DataFlowEditorInner() {
             {t('filter.showRelated')}
           </label>
           
+          {showOnlyRelated && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              paddingLeft: '8px',
+              borderLeft: `2px solid ${theme.colors.border}`,
+            }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: theme.typography.fontSize.sm,
+                color: theme.colors.textSecondary,
+                cursor: 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={showUpstream}
+                  onChange={(e) => setShowUpstream(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {t('filter.showUpstream')}
+              </label>
+              
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: theme.typography.fontSize.sm,
+                color: theme.colors.textSecondary,
+                cursor: 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={showDownstream}
+                  onChange={(e) => setShowDownstream(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                {t('filter.showDownstream')}
+              </label>
+            </div>
+          )}
+          
           <button
             onClick={handleAutoLayout}
             style={{
@@ -1139,10 +1741,13 @@ function DataFlowEditorInner() {
             <label style={{ 
               fontSize: theme.typography.fontSize.sm, 
               color: theme.colors.textSecondary 
-            }}>{t('filter.lineage')}:</label>
+            }}>{t('filter.analysis')}:</label>
             <select
               value={lineageMode}
-              onChange={(e) => setLineageMode(e.target.value as any)}
+              onChange={(e) => {
+                const newMode = e.target.value as any;
+                setLineageMode(newMode);
+              }}
               style={{
                 padding: '4px 8px',
                 fontSize: theme.typography.fontSize.sm,
@@ -1151,12 +1756,13 @@ function DataFlowEditorInner() {
                 backgroundColor: theme.colors.surface,
                 color: theme.colors.textPrimary,
               }}
-              title="Show data lineage for selected nodes"
+              title="Analyze data flow patterns for selected nodes"
             >
               <option value="none">{t('filter.none')}</option>
-              <option value="upstream">{t('filter.upstream')}</option>
-              <option value="downstream">{t('filter.downstream')}</option>
-              <option value="both">{t('filter.both')}</option>
+              <option value="impact">{t('filter.impact')}</option>
+              <option value="dependency">{t('filter.dependency')}</option>
+              <option value="path">{t('filter.dataPath')}</option>
+              <option value="critical">{t('filter.critical')}</option>
             </select>
           </div>
 
@@ -1182,29 +1788,7 @@ function DataFlowEditorInner() {
             {showGroupManager ? t('filter.closeGroups') : t('filter.groups')}
           </button>
 
-          <button
-            onClick={() => navigate('/sql-generator')}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: theme.colors.info,
-              color: theme.colors.surface,
-              border: 'none',
-              borderRadius: theme.borderRadius.sm,
-              fontSize: theme.typography.fontSize.sm,
-              cursor: 'pointer',
-              fontWeight: theme.typography.fontWeight.medium,
-              transition: theme.transitions.fast,
-              minWidth: '140px',
-              whiteSpace: 'nowrap' as const,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-            title="Generate nodes from SQL query"
-          >
-            {t('menu.sqlGenerator')}
-          </button>
-
-          {(showOnlyRelated || selectedGroupIds.size > 0) && (
+          {(showOnlyRelated || lineageMode !== 'none' || selectedGroupIds.size > 0) && (
             <div style={{
               fontSize: theme.typography.fontSize.sm,
               color: theme.colors.textSecondary,
@@ -1232,6 +1816,7 @@ function DataFlowEditorInner() {
           onDrop={onDrop}
           onDragOver={onDragOver}
           onNodeClick={onNodeClick}
+          onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
           onWheel={handleWheel}
           nodeTypes={nodeTypes}
@@ -1260,6 +1845,16 @@ function DataFlowEditorInner() {
           onEditingChange={(isEditing) => {
             setEditingNodeId(isEditing && selectedNode ? selectedNode.id : null);
           }}
+        />
+        
+        <EdgePropertiesPanel
+          selectedEdge={selectedEdge}
+          nodes={nodes}
+          onClose={onPropertiesPanelClose}
+          onStartReconnection={startEdgeReconnection}
+          onEdgeDelete={onEdgeDelete}
+          reconnectingEdge={reconnectingEdge}
+          onCancelReconnection={cancelEdgeReconnection}
         />
         
         {/* Group Manager Panel */}
