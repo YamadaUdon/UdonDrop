@@ -28,6 +28,7 @@ import { isTauri } from '../utils/platform';
 import Sidebar from '../components/Sidebar';
 import CustomNode from '../components/CustomNode';
 import PropertiesPanel from '../components/PropertiesPanel';
+import EdgePropertiesPanel from '../components/EdgePropertiesPanel';
 import MenuBar from '../components/MenuBar';
 import GroupManagerPanel from '../components/GroupManagerPanel';
 import { usePipeline } from '../hooks/usePipeline';
@@ -77,7 +78,12 @@ function DataFlowEditorInner() {
   const [edges, setEdges, onEdgesChange] = useEdgesState(getInitialEdges());
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [reconnectingEdge, setReconnectingEdge] = useState<{
+    edge: Edge;
+    mode: 'source' | 'target';
+  } | null>(null);
   const [showOnlyRelated, setShowOnlyRelated] = useState(false);
   const [showUpstream, setShowUpstream] = useState(true);
   const [showDownstream, setShowDownstream] = useState(true);
@@ -116,6 +122,21 @@ function DataFlowEditorInner() {
       
       .react-flow__node.dragging {
         transition: none !important;
+      }
+      
+      @keyframes pulse {
+        0% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: translate(-50%, -50%) scale(1.1);
+          opacity: 0.8;
+        }
+        100% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
       }
     `;
     
@@ -339,18 +360,75 @@ function DataFlowEditorInner() {
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     setSelectedNode(node);
+    setSelectedEdge(null);
+    setReconnectingEdge(null);
+  }, []);
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.stopPropagation();
+    setSelectedEdge(edge);
+    setSelectedNode(null);
+    setReconnectingEdge(null);
   }, []);
 
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
+    setSelectedEdge(null);
+    setReconnectingEdge(null);
   }, []);
 
   // Custom mouse event handler for more precise control (removed - React Flow handles this internally)
 
   const onPropertiesPanelClose = useCallback(() => {
     setSelectedNode(null);
+    setSelectedEdge(null);
     setEditingNodeId(null);
+    setReconnectingEdge(null);
   }, []);
+
+  const startEdgeReconnection = useCallback((edge: Edge, mode: 'source' | 'target') => {
+    setReconnectingEdge({ edge, mode });
+    setSelectedEdge(null);
+  }, []);
+
+  const handleEdgeReconnection = useCallback((targetNodeId: string) => {
+    if (!reconnectingEdge) return;
+
+    const { edge, mode } = reconnectingEdge;
+    
+    // Prevent self-connection
+    if (mode === 'source' && targetNodeId === edge.target) return;
+    if (mode === 'target' && targetNodeId === edge.source) return;
+    
+    // Check for duplicate connections
+    const isDuplicate = edges.some(e => 
+      e.id !== edge.id && 
+      e.source === (mode === 'source' ? targetNodeId : edge.source) &&
+      e.target === (mode === 'target' ? targetNodeId : edge.target)
+    );
+    
+    if (isDuplicate) {
+      alert(t('edge.duplicateConnection'));
+      return;
+    }
+
+    const updatedEdge = {
+      ...edge,
+      [mode]: targetNodeId,
+    };
+
+    setEdges(eds => eds.map(e => e.id === edge.id ? updatedEdge : e));
+    setReconnectingEdge(null);
+  }, [reconnectingEdge, edges, setEdges, t]);
+
+  const cancelEdgeReconnection = useCallback(() => {
+    setReconnectingEdge(null);
+  }, []);
+
+
+  const onEdgeDelete = useCallback((edgeId: string) => {
+    setEdges(eds => eds.filter(edge => edge.id !== edgeId));
+  }, [setEdges]);
 
   const onNodeUpdate = useCallback(
     (nodeId: string, data: any) => {
@@ -852,7 +930,8 @@ function DataFlowEditorInner() {
   }, []);
 
   // Enhanced lineage analysis with practical use cases
-  const getLineageNodes = useCallback((nodeId: string, mode: 'impact' | 'dependency' | 'path' | 'critical') => {
+  const getLineageNodes = useCallback((nodeId: string, mode: 'none' | 'impact' | 'dependency' | 'path' | 'critical') => {
+    if (mode === 'none') return new Set<string>();
     const lineageNodeIds = new Set<string>();
     lineageNodeIds.add(nodeId);
     
@@ -1116,11 +1195,17 @@ function DataFlowEditorInner() {
     const processedNodes = nodes.map(node => {
       const isSearchMatch = searchResults.has(node.id);
       const isSelected = node.selected;
+      const isReconnectTarget = reconnectingEdge && 
+        ((reconnectingEdge.mode === 'source' && node.id !== reconnectingEdge.edge.target) ||
+         (reconnectingEdge.mode === 'target' && node.id !== reconnectingEdge.edge.source));
+      
       return {
         ...node,
         data: {
           ...node.data,
           isEditing: editingNodeId === node.id,
+          isReconnectTarget,
+          onReconnect: isReconnectTarget ? () => handleEdgeReconnection(node.id) : undefined,
         },
         style: {
           ...node.style,
@@ -1132,7 +1217,13 @@ function DataFlowEditorInner() {
           ...(isSelected && {
             opacity: 1,
             zIndex: 1000,
-          })
+          }),
+          ...(isReconnectTarget && {
+            border: `3px dashed ${theme.colors.accent}`,
+            boxShadow: `0 0 15px ${theme.colors.accent}50`,
+            cursor: 'pointer',
+            zIndex: 99994,
+          }),
         }
       };
     });
@@ -1143,7 +1234,8 @@ function DataFlowEditorInner() {
       const selectedNodes = processedNodes.filter(node => node.selected);
       const selectedNodeIds = new Set(selectedNodes.map(node => node.id));
       const isConnectedToSelected = selectedNodeIds.has(edge.source) || selectedNodeIds.has(edge.target);
-      const isEdgeSelected = edge.selected;
+      const isEdgeSelected = edge.selected || (selectedEdge && selectedEdge.id === edge.id);
+      const isReconnectingThisEdge = reconnectingEdge && reconnectingEdge.edge.id === edge.id;
       
       let strokeColor = '#64748b'; // Darker slate gray for better visibility
       let strokeWidth = 2;
@@ -1152,7 +1244,17 @@ function DataFlowEditorInner() {
       let animated = false;
       let style = {};
       
-      if (isEdgeSelected) {
+      if (isReconnectingThisEdge) {
+        // Edge being reconnected gets special styling
+        strokeColor = '#f59e0b'; // Orange for reconnection mode
+        strokeWidth = 6;
+        strokeOpacity = 1;
+        strokeDasharray = '15,5';
+        animated = true;
+        style = {
+          filter: `drop-shadow(0 0 12px ${strokeColor}60)`,
+        };
+      } else if (isEdgeSelected) {
         // Selected edge gets maximum emphasis
         strokeColor = transferType === 'realtime' ? '#10b981' : '#3b82f6';
         strokeWidth = 5;
@@ -1248,7 +1350,7 @@ function DataFlowEditorInner() {
       }
       
       // Add lineage nodes if analysis mode is active
-      if (hasAnalysisMode && lineageMode !== 'none') {
+      if (hasAnalysisMode) {
         selectedNodes.forEach(selectedNode => {
           try {
             const lineageIds = getLineageNodes(selectedNode.id, lineageMode as 'impact' | 'dependency' | 'path' | 'critical');
@@ -1266,7 +1368,7 @@ function DataFlowEditorInner() {
       
       const filteredNodes = processedNodes.filter(node => allRelatedNodeIds.has(node.id)).map(node => {
         const isSelected = selectedNodes.some(selected => selected.id === node.id);
-        const isInAnalysis = hasAnalysisMode && lineageMode !== 'none';
+        const isInAnalysis = hasAnalysisMode;
         
         if (isSelected) {
           return node; // Already styled above
@@ -1318,7 +1420,7 @@ function DataFlowEditorInner() {
         allRelatedNodeIds.has(edge.source) && allRelatedNodeIds.has(edge.target)
       ).map(edge => {
         // Add analysis-specific edge styling
-        if (hasAnalysisMode && lineageMode !== 'none') {
+        if (hasAnalysisMode) {
           const analysisEdgeStyles = {
             impact: {
               stroke: '#ef4444',
@@ -1370,7 +1472,7 @@ function DataFlowEditorInner() {
     
     // Return all nodes and edges
     return { displayNodes: processedNodes, displayEdges: processedEdges };
-  }, [nodes, edges, selectedGroupIds, editingNodeId, searchResults, theme, showOnlyRelated, showUpstream, showDownstream, lineageMode, getRelatedNodes, getLineageNodes]);
+  }, [nodes, edges, selectedGroupIds, editingNodeId, searchResults, theme, showOnlyRelated, showUpstream, showDownstream, lineageMode, selectedEdge, reconnectingEdge, handleEdgeReconnection, getRelatedNodes, getLineageNodes]);
 
   // Toggle show only related nodes
   const toggleShowOnlyRelated = useCallback(() => {
@@ -1391,9 +1493,15 @@ function DataFlowEditorInner() {
       // Delete selected nodes and edges with Delete key (only when not in input field)
       if ((event.key === 'Delete' || event.key === 'Backspace') && !isInputField) {
         const selectedNodes = nodes.filter(node => node.selected);
-        const selectedEdges = edges.filter(edge => edge.selected);
+        const selectedEdgesFromFlow = edges.filter(edge => edge.selected);
         
-        if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+        // Also include the selected edge from the properties panel
+        const allSelectedEdges = selectedEdgesFromFlow.slice();
+        if (selectedEdge && !allSelectedEdges.some(e => e.id === selectedEdge.id)) {
+          allSelectedEdges.push(selectedEdge);
+        }
+        
+        if (selectedNodes.length > 0 || allSelectedEdges.length > 0) {
           // Prevent default to avoid any browser back navigation
           event.preventDefault();
           
@@ -1415,9 +1523,14 @@ function DataFlowEditorInner() {
           }
           
           // Remove selected edges
-          if (selectedEdges.length > 0) {
-            const selectedEdgeIds = selectedEdges.map(edge => edge.id);
+          if (allSelectedEdges.length > 0) {
+            const selectedEdgeIds = allSelectedEdges.map(edge => edge.id);
             setEdges(eds => eds.filter(edge => !selectedEdgeIds.includes(edge.id)));
+            
+            // Clear selected edge in properties panel if it was deleted
+            if (selectedEdge && selectedEdgeIds.includes(selectedEdge.id)) {
+              setSelectedEdge(null);
+            }
           }
         }
       }
@@ -1430,7 +1543,7 @@ function DataFlowEditorInner() {
         }
       }
     },
-    [nodes, edges, selectedNode, setNodes, setEdges, toggleShowOnlyRelated]
+    [nodes, edges, selectedNode, selectedEdge, setNodes, setEdges, toggleShowOnlyRelated]
   );
 
   // Add keyboard event listener
@@ -1703,6 +1816,7 @@ function DataFlowEditorInner() {
           onDrop={onDrop}
           onDragOver={onDragOver}
           onNodeClick={onNodeClick}
+          onEdgeClick={onEdgeClick}
           onPaneClick={onPaneClick}
           onWheel={handleWheel}
           nodeTypes={nodeTypes}
@@ -1731,6 +1845,16 @@ function DataFlowEditorInner() {
           onEditingChange={(isEditing) => {
             setEditingNodeId(isEditing && selectedNode ? selectedNode.id : null);
           }}
+        />
+        
+        <EdgePropertiesPanel
+          selectedEdge={selectedEdge}
+          nodes={nodes}
+          onClose={onPropertiesPanelClose}
+          onStartReconnection={startEdgeReconnection}
+          onEdgeDelete={onEdgeDelete}
+          reconnectingEdge={reconnectingEdge}
+          onCancelReconnection={cancelEdgeReconnection}
         />
         
         {/* Group Manager Panel */}

@@ -178,5 +178,30 @@
     "clear": "検索をクリア",
     "results": "{{count}}件の結果",
     "results_other": "{{count}}件の結果"
+  },
+  "edge": {
+    "title": "接続プロパティ",
+    "reconnectingTitle": "接続を再設定中",
+    "connectionInfo": "接続情報",
+    "from": "始点",
+    "to": "終点",
+    "label": "ラベル",
+    "labelPlaceholder": "接続ラベルを入力",
+    "transferType": "転送タイプ",
+    "batch": "バッチ",
+    "realtime": "リアルタイム",
+    "update": "更新",
+    "cancel": "キャンセル",
+    "reconnection": "接続の再設定",
+    "changeSource": "始点を変更",
+    "changeTarget": "終点を変更",
+    "deleteConnection": "接続を削除",
+    "reconnectionMode": "再接続モード",
+    "reconnectionInstructions": "接続の{{mode}}を変更するノードをクリックしてください。",
+    "source": "始点",
+    "target": "終点",
+    "confirmDelete": "この接続を削除してもよろしいですか？",
+    "duplicateConnection": "これらのノード間には既に接続が存在します。",
+    "unknown": "不明"
   }
 }

@@ -178,5 +178,30 @@
     "clear": "Clear search",
     "results": "{{count}} result",
     "results_other": "{{count}} results"
+  },
+  "edge": {
+    "title": "Edge Properties",
+    "reconnectingTitle": "Reconnecting Edge",
+    "connectionInfo": "Connection Info",
+    "from": "From",
+    "to": "To",
+    "label": "Label",
+    "labelPlaceholder": "Enter connection label",
+    "transferType": "Transfer Type",
+    "batch": "Batch",
+    "realtime": "Real-time",
+    "update": "Update",
+    "cancel": "Cancel",
+    "reconnection": "Reconnection",
+    "changeSource": "Change Source",
+    "changeTarget": "Change Target",
+    "deleteConnection": "Delete Connection",
+    "reconnectionMode": "Reconnection Mode",
+    "reconnectionInstructions": "Click on a node to reconnect the {{mode}} of this connection.",
+    "source": "source",
+    "target": "target",
+    "confirmDelete": "Are you sure you want to delete this connection?",
+    "duplicateConnection": "A connection between these nodes already exists.",
+    "unknown": "Unknown"
   }
 }
