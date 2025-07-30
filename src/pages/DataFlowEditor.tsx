@@ -486,18 +486,30 @@ function DataFlowEditorInner() {
   );
 
   const handleNew = useCallback(() => {
-    // Show confirmation dialog if there are existing nodes
-    if (nodes.length > 0 || edges.length > 0) {
-      const confirmed = window.confirm(t('alerts.confirmNew'));
+    // Always show confirmation dialog before clearing data
+    const hasData = nodes.length > 0 || edges.length > 0;
+    
+    if (hasData) {
+      // Use a more explicit confirmation dialog
+      const confirmed = window.confirm(
+        t('alerts.confirmNew') || 
+        'Are you sure you want to create a new diagram? This will delete all current nodes and edges.'
+      );
+      
       if (!confirmed) {
         return;
       }
     }
     
+    // Clear all data after confirmation
     setNodes([]);
     setEdges([]);
     setSelectedNode(null);
+    setSelectedEdge(null);
     setSelectedGroupIds(new Set());
+    setLineageMode('none');
+    setShowOnlyRelated(false);
+    
     // Clear localStorage as well
     localStorage.removeItem('dataflow_editor_nodes');
     localStorage.removeItem('dataflow_editor_edges');
