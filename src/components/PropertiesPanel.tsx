@@ -57,6 +57,30 @@ const PropertiesPanel: FC<PropertiesPanelProps> = ({ selectedNode, onNodeUpdate,
     }
   };
 
+  const handleGroupToggle = (groupId: string) => {
+    const currentGroupIds = groupManager.getNodeGroupIds(nodeData);
+    let updatedGroupIds: string[];
+    
+    if (currentGroupIds.includes(groupId)) {
+      // Remove group
+      updatedGroupIds = currentGroupIds.filter(id => id !== groupId);
+    } else {
+      // Add group
+      updatedGroupIds = [...currentGroupIds, groupId];
+    }
+    
+    const updatedData = { 
+      ...nodeData, 
+      groupIds: updatedGroupIds.length > 0 ? updatedGroupIds : undefined,
+      // Keep backward compatibility
+      groupId: updatedGroupIds.length === 1 ? updatedGroupIds[0] : undefined
+    };
+    setNodeData(updatedData);
+    if (selectedNode) {
+      onNodeUpdate(selectedNode.id, updatedData);
+    }
+  };
+
   const handleNodeTypeChange = (newType: string) => {
     if (selectedNode && onNodeTypeChange) {
       onNodeTypeChange(selectedNode.id, newType);
@@ -435,40 +459,115 @@ const PropertiesPanel: FC<PropertiesPanelProps> = ({ selectedNode, onNodeUpdate,
 
       {/* Group Selection */}
       <div style={fieldStyle}>
-        <label style={labelStyle}>{t('properties.group') + ':'}</label>
-        <select
-          style={inputStyle}
-          value={nodeData.groupId || ''}
-          onChange={(e) => handleInputChange('groupId', e.target.value)}
-          onFocus={handleInputFocus}
-          onBlur={handleInputBlur}
-        >
-          <option value="">{t('properties.selectGroup')}</option>
-          {availableGroups.map(group => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-        {nodeData.groupId && availableGroups.length > 0 && (
+        <label style={labelStyle}>{t('properties.groups') || 'Groups'} ({groupManager.getNodeGroupIds(nodeData).length}):</label>
+        <div style={{
+          maxHeight: '120px',
+          overflowY: 'auto',
+          border: `1px solid ${theme.colors.border}`,
+          borderRadius: '4px',
+          backgroundColor: theme.colors.background,
+        }}>
+          {availableGroups.length === 0 ? (
+            <div style={{
+              padding: '8px',
+              fontSize: '11px',
+              color: theme.colors.textSecondary,
+              textAlign: 'center'
+            }}>
+              {t('properties.noGroupsAvailable') || 'No groups available'}
+            </div>
+          ) : (
+            availableGroups.map(group => {
+              const isSelected = groupManager.isNodeInGroup(nodeData, group.id);
+              return (
+                <div
+                  key={group.id}
+                  style={{
+                    padding: '6px 8px',
+                    cursor: 'pointer',
+                    backgroundColor: isSelected ? theme.colors.accent + '15' : 'transparent',
+                    borderBottom: `1px solid ${theme.colors.border}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    fontSize: '12px',
+                  }}
+                  onClick={() => handleGroupToggle(group.id)}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = theme.colors.surfaceHover;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      border: `2px solid ${isSelected ? theme.colors.accent : theme.colors.border}`,
+                      borderRadius: '3px',
+                      marginRight: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isSelected ? theme.colors.accent : 'transparent',
+                      color: 'white',
+                      fontSize: '10px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    {isSelected ? '✓' : ''}
+                  </div>
+                  <div
+                    style={{
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      backgroundColor: group.color,
+                      border: '1px solid #ccc',
+                      marginRight: '8px',
+                    }}
+                  />
+                  <span style={{ 
+                    color: theme.colors.textPrimary,
+                    flex: 1,
+                  }}>
+                    {group.name}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+        
+        {/* Selected groups summary */}
+        {groupManager.getNodeGroupIds(nodeData).length > 0 && (
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginTop: '4px',
+            marginTop: '6px',
+            fontSize: '11px',
+            color: theme.colors.textSecondary,
           }}>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: availableGroups.find(g => g.id === nodeData.groupId)?.color || '#ccc',
-                border: '1px solid #ccc',
-                marginRight: '6px',
-              }}
-            />
-            <span style={{ fontSize: '11px', color: theme.colors.textSecondary }}>
-              {availableGroups.find(g => g.id === nodeData.groupId)?.name}
-            </span>
+            <strong>{t('properties.selectedGroups') || 'Selected'}:</strong>
+            <div style={{ marginTop: '2px' }}>
+              {groupManager.getNodeGroups(nodeData).map((group, index) => (
+                <span key={group.id} style={{ display: 'inline-flex', alignItems: 'center', marginRight: '8px', marginBottom: '2px' }}>
+                  <div
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: group.color,
+                      border: '1px solid #ccc',
+                      marginRight: '4px',
+                    }}
+                  />
+                  {group.name}
+                </span>
+              ))}
+            </div>
           </div>
         )}
       </div>

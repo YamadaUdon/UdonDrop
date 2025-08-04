@@ -17,11 +17,12 @@ interface MenuBarProps {
   onExportPNG?: () => void;
   onExportSVG?: () => void;
   onExportJSON?: () => void;
+  onExportExcel?: () => void;
   onImportJSON?: (jsonData: any) => void;
   isLoading: boolean;
 }
 
-const MenuBar: FC<MenuBarProps> = ({ nodes, edges, onSave, onLoad, onNew, onExportPNG, onExportSVG, onExportJSON, onImportJSON, isLoading }) => {
+const MenuBar: FC<MenuBarProps> = ({ nodes, edges, onSave, onLoad, onNew, onExportPNG, onExportSVG, onExportJSON, onExportExcel, onImportJSON, isLoading }) => {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
   const [pipelineName, setPipelineName] = useState('');
@@ -400,6 +401,28 @@ const MenuBar: FC<MenuBarProps> = ({ nodes, edges, onSave, onLoad, onNew, onExpo
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 {t('menu.exportJSON')}
+              </button>
+              <button
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: theme.colors.textPrimary,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: theme.typography.fontSize.md,
+                  transition: theme.transitions.fast,
+                }}
+                onClick={() => {
+                  onExportExcel?.();
+                  (document.querySelector('[style*="display: block"]') as HTMLElement).style.display = 'none';
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.surfaceHover}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                {t('menu.exportExcel') || 'Export as Excel'}
               </button>
             </div>
           </div>

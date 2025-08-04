@@ -16,7 +16,8 @@ interface CustomNodeData {
   lastUpdated?: Date;
   owner?: string;
   department?: string;
-  groupId?: string;
+  groupId?: string; // Deprecated: use groupIds instead
+  groupIds?: string[]; // New: support multiple groups
   databaseName?: string;
   urlLink?: string;
   isReconnectTarget?: boolean;
@@ -31,8 +32,9 @@ const CustomNode: FC<CustomNodeProps> = ({ data, selected, isEditing, type }) =>
   // Use isEditing from data if available, otherwise use prop
   const nodeIsEditing = data.isEditing ?? isEditing ?? false;
   
-  // Get group information
-  const nodeGroup = data.groupId ? groupManager.getGroup(data.groupId) : null;
+  // Get group information (support multiple groups)
+  const nodeGroups = groupManager.getNodeGroups(data);
+  const nodeGroup = nodeGroups.length > 0 ? nodeGroups[0] : null; // Use first group for styling compatibility
   
   // Get theme
   const { isDark } = useTheme();
@@ -303,31 +305,59 @@ const CustomNode: FC<CustomNodeProps> = ({ data, selected, isEditing, type }) =>
         </div>
       )}
       
-      {/* Group badge */}
-      {nodeGroup && (
+      {/* Group badges */}
+      {nodeGroups.length > 0 && (
         <div style={{
           position: 'absolute',
           top: '-8px',
           right: '-8px',
-          backgroundColor: nodeGroup.color,
-          border: `2px solid ${theme.colors.surface}`,
-          borderRadius: '12px',
-          padding: '2px 6px',
-          minWidth: '20px',
-          height: '16px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '9px',
-          fontWeight: 'bold',
-          color: isDark ? '#fff' : '#333',
-          boxShadow: `0 2px 6px ${nodeGroup.color}60`,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          maxWidth: '60px',
-        }} title={`Group: ${nodeGroup.name}`}>
-          {nodeGroup.name.charAt(0).toUpperCase()}
+          flexDirection: 'column',
+          gap: '2px',
+          alignItems: 'flex-end',
+        }}>
+          {nodeGroups.slice(0, 3).map((group, index) => (
+            <div key={group.id} style={{
+              backgroundColor: group.color,
+              border: `2px solid ${theme.colors.surface}`,
+              borderRadius: '12px',
+              padding: '2px 6px',
+              minWidth: '20px',
+              height: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '9px',
+              fontWeight: 'bold',
+              color: isDark ? '#fff' : '#333',
+              boxShadow: `0 2px 6px ${group.color}60`,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              maxWidth: '60px',
+            }} title={`Group: ${group.name}`}>
+              {group.name.charAt(0).toUpperCase()}
+            </div>
+          ))}
+          {nodeGroups.length > 3 && (
+            <div style={{
+              backgroundColor: theme.colors.textSecondary,
+              border: `2px solid ${theme.colors.surface}`,
+              borderRadius: '12px',
+              padding: '2px 6px',
+              minWidth: '20px',
+              height: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '9px',
+              fontWeight: 'bold',
+              color: isDark ? '#fff' : '#333',
+              boxShadow: `0 2px 6px ${theme.colors.textSecondary}60`,
+            }} title={`+${nodeGroups.length - 3} more groups: ${nodeGroups.slice(3).map(g => g.name).join(', ')}`}>
+              +{nodeGroups.length - 3}
+            </div>
+          )}
         </div>
       )}
       

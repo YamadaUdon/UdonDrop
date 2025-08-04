@@ -8,6 +8,7 @@
     "exportPNG": "Export as PNG",
     "exportSVG": "Export as SVG",
     "exportJSON": "Export as JSON",
+    "exportExcel": "Export as Excel",
     "import": "Import",
     "importJSON": "Import JSON",
     "autoLayout": "Auto Layout",

@@ -35,7 +35,8 @@ export interface DataNode {
     owner?: string;
     department?: string;
     // Group information
-    groupId?: string;
+    groupId?: string; // Deprecated: use groupIds instead
+    groupIds?: string[]; // New: support multiple groups
   };
   position: {
     x: number;

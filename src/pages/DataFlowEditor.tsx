@@ -19,7 +19,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '../../node_modules/react-i18next';
-import html2canvas from 'html2canvas';
+// html2canvasは動的インポートで使用
 
 import { useTheme } from '../contexts/ThemeContext';
 import { getTheme } from '../utils/theme';
@@ -33,6 +33,7 @@ import MenuBar from '../components/MenuBar';
 import GroupManagerPanel from '../components/GroupManagerPanel';
 import { usePipeline } from '../hooks/usePipeline';
 import { groupManager } from '../services/groupManager';
+import { exportToExcel } from '../utils/excelExport';
 
 const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
@@ -553,6 +554,9 @@ function DataFlowEditorInner() {
       originalStyles.push({ element: flowElement, property: 'backgroundColor', value: flowElement.style.backgroundColor });
       flowElement.style.backgroundColor = 'transparent';
 
+      // 動的にhtml2canvasをインポート（必要な時だけロード）
+      const html2canvas = (await import('html2canvas')).default;
+      
       // Configure html2canvas options for transparent background
       const canvas = await html2canvas(flowElement, {
         useCORS: true,
@@ -662,6 +666,43 @@ function DataFlowEditorInner() {
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
+  }, [nodes, edges]);
+
+  // Excel Export function
+  const handleExportExcel = useCallback(async () => {
+    if (!nodes.length) return;
+    
+    try {
+      // Convert groups to Map format for export with actual node associations
+      const groupsMap = new Map();
+      const allGroups = groupManager.getAllGroups();
+      
+      allGroups.forEach(group => {
+        // Find nodes that belong to this group (support multiple groups per node)
+        const groupNodes = nodes.filter(node => {
+          const nodeGroupIds = groupManager.getNodeGroupIds(node.data);
+          return nodeGroupIds.includes(group.id);
+        });
+        const nodeIds = new Set(groupNodes.map(node => node.id));
+        
+        if (nodeIds.size > 0) { // Only include groups that have nodes
+          groupsMap.set(group.id, {
+            name: group.name,
+            color: group.color,
+            nodes: nodeIds,
+          });
+        }
+      });
+      
+      await exportToExcel({
+        nodes: nodes,
+        edges: edges,
+        groups: groupsMap,
+      });
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      alert('Excel export failed. Please try again.');
+    }
   }, [nodes, edges]);
 
   // JSON Import function
@@ -1331,9 +1372,10 @@ function DataFlowEditorInner() {
 
     // Group filter takes priority
     if (selectedGroupIds.size > 0) {
-      const groupFilteredNodes = processedNodes.filter(node => 
-        node.data.groupId && selectedGroupIds.has(node.data.groupId)
-      );
+      const groupFilteredNodes = processedNodes.filter(node => {
+        const nodeGroupIds = groupManager.getNodeGroupIds(node.data);
+        return nodeGroupIds.some(groupId => selectedGroupIds.has(groupId));
+      });
       const groupFilteredEdges = processedEdges.filter(edge => 
         groupFilteredNodes.some(node => node.id === edge.source) && 
         groupFilteredNodes.some(node => node.id === edge.target)
@@ -1585,6 +1627,7 @@ function DataFlowEditorInner() {
         onExportPNG={handleExportPNG}
         onExportSVG={handleExportSVG}
         onExportJSON={handleExportJSON}
+        onExportExcel={handleExportExcel}
         onImportJSON={handleImportJSON}
         isLoading={isLoading}
       />

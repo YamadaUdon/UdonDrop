@@ -348,13 +348,35 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
           />
 
           <div style={{ marginBottom: solitudeTheme.spacing.sm }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: solitudeTheme.typography.fontSize.sm }}>
-              {t('groups.color')}
-            </label>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {groupManager.getAvailableColors().concat(formData.color ? [formData.color] : []).map(color => (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <label style={{ fontSize: solitudeTheme.typography.fontSize.sm }}>
+                {t('groups.color')}
+              </label>
+              <button
+                type="button"
+                style={{
+                  padding: '2px 6px',
+                  fontSize: '10px',
+                  borderRadius: '4px',
+                  border: `1px solid ${solitudeTheme.colors.border}`,
+                  backgroundColor: solitudeTheme.colors.surface,
+                  color: solitudeTheme.colors.textSecondary,
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  const randomColor = groupManager.generateRandomColorPalette(1)[0];
+                  setFormData({ ...formData, color: randomColor });
+                }}
+                title={t('groups.generateRandomColor') || 'Generate random color'}
+              >
+                🎲 Random
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              {groupManager.getAllAvailableColors().slice(0, 30).map(color => (
                 <button
                   key={color}
+                  type="button"
                   style={{
                     width: '24px',
                     height: '24px',
@@ -364,9 +386,52 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
                     cursor: 'pointer',
                   }}
                   onClick={() => setFormData({ ...formData, color })}
+                  title={color}
                 />
               ))}
+              <button
+                type="button"
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px dashed #999',
+                  backgroundColor: 'transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                }}
+                onClick={() => {
+                  const randomColors = groupManager.generateRandomColorPalette(8);
+                  setFormData({ ...formData, color: randomColors[0] });
+                }}
+                title={t('groups.moreColors') || 'More random colors'}
+              >
+                +
+              </button>
             </div>
+            {formData.color && (
+              <div style={{ 
+                marginTop: '8px', 
+                fontSize: '11px', 
+                color: solitudeTheme.colors.textSecondary,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                Selected: 
+                <div style={{
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  backgroundColor: formData.color,
+                  border: '1px solid #ccc',
+                }} />
+                {formData.color}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: solitudeTheme.spacing.sm }}>

@@ -9,6 +9,31 @@ const DEFAULT_GROUP_COLORS = [
   '#FFF8E1', // Light Yellow
   '#FFEBEE', // Light Pink
   '#F1F8E9', // Light Lime
+  '#FCE4EC', // Light Pink 2
+  '#E8EAF6', // Light Indigo
+  '#F3E5F5', // Light Purple 2
+  '#E0F7FA', // Light Cyan
+  '#F9FBE7', // Light Lime 2
+  '#FFF3E0', // Light Orange 2
+  '#EFEBE9', // Light Brown
+  '#FAFAFA', // Light Grey
+  '#E1F5FE', // Light Blue 2
+  '#F1F8E9', // Light Green 2
+  '#FDF2E9', // Light Peach
+  '#FAE5D3', // Light Beige
+];
+
+// Extended color palette for more variety
+const EXTENDED_COLOR_PALETTE = [
+  // Pastels
+  '#FFB3BA', '#FFDFBA', '#FFFFBA', '#BAFFC9', '#BAE1FF',
+  '#E6B3FF', '#FFB3F5', '#B3FFFF', '#FFE4B3', '#D4B3FF',
+  // Soft colors
+  '#FFC1CC', '#FFE5CC', '#FFFACD', '#C1FFC1', '#C1E5FF',
+  '#E1C1FF', '#FFC1F5', '#C1FFFF', '#FFE1C1', '#D1C1FF',
+  // Light vibrant
+  '#FF9999', '#FFCC99', '#FFFF99', '#99FF99', '#99CCFF',
+  '#CC99FF', '#FF99CC', '#99FFFF', '#FFCC99', '#CC99FF',
 ];
 
 export class GroupManager {
@@ -130,25 +155,111 @@ export class GroupManager {
   private getNextAvailableColor(): string {
     const usedColors = new Set(Array.from(this.groups.values()).map(g => g.color));
     
-    // Find first unused default color
+    // First try default colors
     for (const color of DEFAULT_GROUP_COLORS) {
       if (!usedColors.has(color)) {
         return color;
       }
     }
     
-    // Generate random color if all defaults are used
-    return this.generateRandomColor();
+    // Then try extended palette
+    for (const color of EXTENDED_COLOR_PALETTE) {
+      if (!usedColors.has(color)) {
+        return color;
+      }
+    }
+    
+    // Generate smart random color if all predefined colors are used
+    return this.generateSmartRandomColor();
   }
 
   private generateRandomColor(): string {
     const hue = Math.floor(Math.random() * 360);
-    return `hsl(${hue}, 70%, 95%)`;
+    const saturation = 50 + Math.random() * 30; // 50-80%
+    const lightness = 85 + Math.random() * 10; // 85-95%
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }
+
+  private generateSmartRandomColor(): string {
+    const usedColors = new Set(Array.from(this.groups.values()).map(g => g.color));
+    let attempts = 0;
+    const maxAttempts = 50;
+    
+    // Try to generate a color that's visually distinct from existing ones
+    while (attempts < maxAttempts) {
+      const color = this.generateRandomColor();
+      
+      // Check if this color is sufficiently different from existing ones
+      if (!usedColors.has(color) && this.isColorDistinct(color, usedColors)) {
+        return color;
+      }
+      attempts++;
+    }
+    
+    // Fallback: just generate a random color
+    return this.generateRandomColor();
+  }
+
+  private isColorDistinct(newColor: string, existingColors: Set<string>): boolean {
+    // Simple check - in a real implementation, you might want to use color distance calculations
+    const newHue = this.extractHueFromHSL(newColor);
+    if (newHue === null) return true;
+    
+    for (const existingColor of existingColors) {
+      const existingHue = this.extractHueFromHSL(existingColor);
+      if (existingHue !== null && Math.abs(newHue - existingHue) < 30) {
+        return false; // Too similar
+      }
+    }
+    return true;
+  }
+
+  private extractHueFromHSL(color: string): number | null {
+    const hslMatch = color.match(/hsl\((\d+),/);
+    return hslMatch ? parseInt(hslMatch[1], 10) : null;
+  }
+
+  generateRandomColorPalette(count: number = 10): string[] {
+    const colors: string[] = [];
+    const usedColors = new Set<string>();
+    
+    for (let i = 0; i < count; i++) {
+      let attempts = 0;
+      let color: string;
+      
+      do {
+        color = this.generateRandomColor();
+        attempts++;
+      } while (usedColors.has(color) && attempts < 20);
+      
+      colors.push(color);
+      usedColors.add(color);
+    }
+    
+    return colors;
   }
 
   getAvailableColors(): string[] {
     const usedColors = new Set(Array.from(this.groups.values()).map(g => g.color));
-    return DEFAULT_GROUP_COLORS.filter(color => !usedColors.has(color));
+    
+    // Combine default and extended colors
+    const allPredefinedColors = [...DEFAULT_GROUP_COLORS, ...EXTENDED_COLOR_PALETTE];
+    const availableColors = allPredefinedColors.filter(color => !usedColors.has(color));
+    
+    // Add some random colors if needed
+    if (availableColors.length < 5) {
+      const randomColors = this.generateRandomColorPalette(10);
+      availableColors.push(...randomColors.filter(color => !usedColors.has(color)));
+    }
+    
+    return availableColors;
+  }
+
+  getAllAvailableColors(): string[] {
+    // Return all predefined colors plus some random ones
+    const allColors = [...DEFAULT_GROUP_COLORS, ...EXTENDED_COLOR_PALETTE];
+    const randomColors = this.generateRandomColorPalette(20);
+    return [...allColors, ...randomColors];
   }
 
   // Persistence
@@ -210,6 +321,27 @@ export class GroupManager {
       recentGroups: groups.filter(g => g.createdAt > recentThreshold).length,
       colorUsage,
     };
+  }
+
+  // Node group utilities
+  getNodeGroupIds(nodeData: any): string[] {
+    // Support both old single groupId and new multiple groupIds
+    if (nodeData.groupIds && Array.isArray(nodeData.groupIds)) {
+      return nodeData.groupIds;
+    }
+    if (nodeData.groupId) {
+      return [nodeData.groupId];
+    }
+    return [];
+  }
+
+  getNodeGroups(nodeData: any): NodeGroup[] {
+    const groupIds = this.getNodeGroupIds(nodeData);
+    return groupIds.map(id => this.getGroup(id)).filter(Boolean) as NodeGroup[];
+  }
+
+  isNodeInGroup(nodeData: any, groupId: string): boolean {
+    return this.getNodeGroupIds(nodeData).includes(groupId);
   }
 
   // Validation

@@ -8,6 +8,7 @@
     "exportPNG": "PNG形式でエクスポート",
     "exportSVG": "SVG形式でエクスポート",
     "exportJSON": "JSON形式でエクスポート",
+    "exportExcel": "Excel形式でエクスポート",
     "import": "インポート",
     "importJSON": "JSONをインポート",
     "autoLayout": "自動レイアウト",
