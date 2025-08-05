@@ -2,9 +2,10 @@ import { FC, useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../../node_modules/react-i18next';
 import { NodeGroup } from '../types';
 import { groupManager } from '../services/groupManager';
-import { solitudeTheme } from '../styles/theme';
 import * as Icons from './Icons';
 import { TrashIcon } from './UIIcons';
+import { useTheme } from '../contexts/ThemeContext';
+import { solitudeTheme } from '../styles/theme';
 
 interface GroupManagerPanelProps {
   selectedGroupIds: Set<string>;
@@ -195,74 +196,84 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
     }
   }, [isDragging, dragOffset]);
 
+  const { isDark } = useTheme();
+  const currentTheme = solitudeTheme;
+
   const panelStyle = {
     position: 'fixed' as const,
     left: `${position.x}px`,
     top: `${position.y}px`,
-    backgroundColor: solitudeTheme.colors.background,
-    border: `1px solid ${solitudeTheme.colors.border}`,
-    borderRadius: solitudeTheme.borderRadius.lg,
-    padding: solitudeTheme.spacing.md,
+    backgroundColor: isDark ? '#1a1a1a' : currentTheme.colors.surface,
+    border: `1px solid ${isDark ? '#333' : currentTheme.colors.border}`,
+    borderRadius: currentTheme.borderRadius.lg,
+    padding: currentTheme.spacing.md,
     width: '320px',
     maxHeight: 'calc(100vh - 100px)',
     overflowY: 'auto' as const,
-    boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,0.3)' : '0 4px 16px rgba(0,0,0,0.2)',
+    boxShadow: isDragging 
+      ? (isDark ? '0 8px 24px rgba(0,0,0,0.7)' : '0 8px 24px rgba(0,0,0,0.3)')
+      : (isDark ? '0 4px 16px rgba(0,0,0,0.5)' : '0 4px 16px rgba(0,0,0,0.2)'),
     zIndex: 99996,
     cursor: isDragging ? 'grabbing' : 'grab',
     transition: isDragging ? 'none' : 'box-shadow 0.2s ease',
+    color: isDark ? '#e0e0e0' : currentTheme.colors.textPrimary,
   };
 
   const headerStyle = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: solitudeTheme.spacing.md,
-    borderBottom: `1px solid ${solitudeTheme.colors.border}`,
-    paddingBottom: solitudeTheme.spacing.sm,
+    marginBottom: currentTheme.spacing.md,
+    borderBottom: `1px solid ${isDark ? '#333' : currentTheme.colors.border}`,
+    paddingBottom: currentTheme.spacing.sm,
     cursor: isDragging ? 'grabbing' : 'grab',
   };
 
   const buttonStyle = {
-    padding: solitudeTheme.spacing.sm,
-    borderRadius: solitudeTheme.borderRadius.sm,
-    border: `1px solid ${solitudeTheme.colors.border}`,
-    backgroundColor: solitudeTheme.colors.surface,
-    color: solitudeTheme.colors.textPrimary,
+    padding: currentTheme.spacing.sm,
+    borderRadius: currentTheme.borderRadius.sm,
+    border: `1px solid ${isDark ? '#444' : currentTheme.colors.border}`,
+    backgroundColor: isDark ? '#2a2a2a' : currentTheme.colors.background,
+    color: isDark ? '#e0e0e0' : currentTheme.colors.textPrimary,
     cursor: 'pointer',
-    fontSize: solitudeTheme.typography.fontSize.sm,
-    fontWeight: solitudeTheme.typography.fontWeight.medium,
+    fontSize: currentTheme.typography.fontSize.sm,
+    fontWeight: currentTheme.typography.fontWeight.medium,
     minWidth: '80px',
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    transition: 'all 0.2s ease',
   };
 
   const primaryButtonStyle = {
     ...buttonStyle,
-    backgroundColor: solitudeTheme.colors.accent,
+    backgroundColor: currentTheme.colors.accent,
     color: 'white',
-    borderColor: solitudeTheme.colors.accent,
+    borderColor: currentTheme.colors.accent,
     minWidth: '90px',
   };
 
   const inputStyle = {
     width: '100%',
-    padding: solitudeTheme.spacing.sm,
-    border: `1px solid ${solitudeTheme.colors.border}`,
-    borderRadius: solitudeTheme.borderRadius.sm,
-    fontSize: solitudeTheme.typography.fontSize.sm,
-    marginBottom: solitudeTheme.spacing.sm,
+    padding: currentTheme.spacing.sm,
+    border: `1px solid ${isDark ? '#444' : currentTheme.colors.border}`,
+    borderRadius: currentTheme.borderRadius.sm,
+    fontSize: currentTheme.typography.fontSize.sm,
+    marginBottom: currentTheme.spacing.sm,
+    backgroundColor: isDark ? '#2a2a2a' : currentTheme.colors.background,
+    color: isDark ? '#e0e0e0' : currentTheme.colors.textPrimary,
   };
 
   const groupItemStyle = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: solitudeTheme.spacing.sm,
-    marginBottom: solitudeTheme.spacing.xs,
-    borderRadius: solitudeTheme.borderRadius.md,
-    border: `1px solid ${solitudeTheme.colors.border}`,
-    backgroundColor: solitudeTheme.colors.surface,
+    padding: currentTheme.spacing.sm,
+    marginBottom: currentTheme.spacing.xs,
+    borderRadius: currentTheme.borderRadius.md,
+    border: `1px solid ${isDark ? '#333' : currentTheme.colors.border}`,
+    backgroundColor: isDark ? '#252525' : currentTheme.colors.background,
+    transition: 'background-color 0.2s ease',
   };
 
   return (
@@ -272,10 +283,10 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
       onMouseDown={handleMouseDown}
     >
       <div style={headerStyle}>
-        <h3 style={{ margin: 0, color: solitudeTheme.colors.textPrimary }}>
+        <h3 style={{ margin: 0, color: isDark ? '#e0e0e0' : currentTheme.colors.textPrimary }}>
           {t('groups.title')}
         </h3>
-        <div style={{ display: 'flex', gap: solitudeTheme.spacing.sm }}>
+        <div style={{ display: 'flex', gap: currentTheme.spacing.sm }}>
           <button
             style={{
               ...buttonStyle,
@@ -305,17 +316,17 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
       {/* Create/Edit Form */}
       {showCreateForm && (
         <div style={{
-          marginBottom: solitudeTheme.spacing.md,
-          padding: solitudeTheme.spacing.md,
-          backgroundColor: solitudeTheme.colors.surfaceHover,
-          borderRadius: solitudeTheme.borderRadius.md,
+          marginBottom: currentTheme.spacing.md,
+          padding: currentTheme.spacing.md,
+          backgroundColor: isDark ? '#2a2a2a' : currentTheme.colors.surfaceHover,
+          borderRadius: currentTheme.borderRadius.md,
         }}>
-          <h4 style={{ margin: `0 0 ${solitudeTheme.spacing.sm} 0` }}>
+          <h4 style={{ margin: `0 0 ${currentTheme.spacing.sm} 0` }}>
             {editingGroupId ? t('groups.editGroup') : t('groups.createNewGroup')}
           </h4>
           
           {formErrors.general && (
-            <div style={{ color: solitudeTheme.colors.error, fontSize: solitudeTheme.typography.fontSize.sm, marginBottom: solitudeTheme.spacing.sm }}>
+            <div style={{ color: currentTheme.colors.error, fontSize: currentTheme.typography.fontSize.sm, marginBottom: currentTheme.spacing.sm }}>
               {formErrors.general}
             </div>
           )}
@@ -323,7 +334,7 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
           <input
             style={{
               ...inputStyle,
-              borderColor: formErrors.name ? solitudeTheme.colors.error : solitudeTheme.colors.border,
+              borderColor: formErrors.name ? currentTheme.colors.error : currentTheme.colors.border,
             }}
             type="text"
             placeholder={t('groups.namePlaceholder')}
@@ -334,7 +345,7 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
             }}
           />
           {formErrors.name && (
-            <div style={{ color: solitudeTheme.colors.error, fontSize: solitudeTheme.typography.fontSize.xs, marginTop: '-8px', marginBottom: solitudeTheme.spacing.sm }}>
+            <div style={{ color: currentTheme.colors.error, fontSize: currentTheme.typography.fontSize.xs, marginTop: '-8px', marginBottom: currentTheme.spacing.sm }}>
               {formErrors.name}
             </div>
           )}
@@ -347,9 +358,9 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
           />
 
-          <div style={{ marginBottom: solitudeTheme.spacing.sm }}>
+          <div style={{ marginBottom: currentTheme.spacing.sm }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <label style={{ fontSize: solitudeTheme.typography.fontSize.sm }}>
+              <label style={{ fontSize: currentTheme.typography.fontSize.sm }}>
                 {t('groups.color')}
               </label>
               <button
@@ -358,9 +369,9 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
                   padding: '2px 6px',
                   fontSize: '10px',
                   borderRadius: '4px',
-                  border: `1px solid ${solitudeTheme.colors.border}`,
-                  backgroundColor: solitudeTheme.colors.surface,
-                  color: solitudeTheme.colors.textSecondary,
+                  border: `1px solid ${currentTheme.colors.border}`,
+                  backgroundColor: isDark ? '#333' : currentTheme.colors.surface,
+                  color: isDark ? '#999' : currentTheme.colors.textSecondary,
                   cursor: 'pointer',
                 }}
                 onClick={() => {
@@ -416,7 +427,7 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
               <div style={{ 
                 marginTop: '8px', 
                 fontSize: '11px', 
-                color: solitudeTheme.colors.textSecondary,
+                color: isDark ? '#999' : currentTheme.colors.textSecondary,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px'
@@ -434,7 +445,7 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: solitudeTheme.spacing.sm }}>
+          <div style={{ display: 'flex', gap: currentTheme.spacing.sm }}>
             <button
               style={{
                 ...primaryButtonStyle,
@@ -462,20 +473,20 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
       )}
 
       {/* Groups List */}
-      <div style={{ marginBottom: solitudeTheme.spacing.md }}>
+      <div style={{ marginBottom: currentTheme.spacing.md }}>
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          marginBottom: solitudeTheme.spacing.sm,
+          marginBottom: currentTheme.spacing.sm,
         }}>
           <h4 style={{ margin: 0 }}>{t('groups.groupsList', { count: groups.length })}</h4>
           {groups.length > 0 && (
             <button
               style={{
                 ...buttonStyle,
-                fontSize: solitudeTheme.typography.fontSize.xs,
-                padding: `${solitudeTheme.spacing.xs} ${solitudeTheme.spacing.sm}`,
+                fontSize: currentTheme.typography.fontSize.xs,
+                padding: `${currentTheme.spacing.xs} ${currentTheme.spacing.sm}`,
                 minWidth: '100px',
               }}
               onClick={handleSelectAllGroups}
@@ -488,9 +499,9 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
         {groups.length === 0 ? (
           <div style={{
             textAlign: 'center',
-            padding: solitudeTheme.spacing.lg,
-            color: solitudeTheme.colors.textSecondary,
-            fontSize: solitudeTheme.typography.fontSize.sm,
+            padding: currentTheme.spacing.lg,
+            color: isDark ? '#999' : currentTheme.colors.textSecondary,
+            fontSize: currentTheme.typography.fontSize.sm,
           }}>
             {t('groups.noGroups')}
           </div>
@@ -502,7 +513,7 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
                   type="checkbox"
                   checked={selectedGroupIds.has(group.id)}
                   onChange={() => handleGroupToggle(group.id)}
-                  style={{ marginRight: solitudeTheme.spacing.sm }}
+                  style={{ marginRight: currentTheme.spacing.sm }}
                 />
                 <div
                   style={{
@@ -511,20 +522,20 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
                     borderRadius: '50%',
                     backgroundColor: group.color,
                     border: '1px solid #ccc',
-                    marginRight: solitudeTheme.spacing.sm,
+                    marginRight: currentTheme.spacing.sm,
                   }}
                 />
                 <div>
                   <div style={{ 
-                    fontSize: solitudeTheme.typography.fontSize.sm,
-                    fontWeight: solitudeTheme.typography.fontWeight.medium,
+                    fontSize: currentTheme.typography.fontSize.sm,
+                    fontWeight: currentTheme.typography.fontWeight.medium,
                   }}>
                     {group.name}
                   </div>
                   {group.description && (
                     <div style={{ 
-                      fontSize: solitudeTheme.typography.fontSize.xs,
-                      color: solitudeTheme.colors.textSecondary,
+                      fontSize: currentTheme.typography.fontSize.xs,
+                      color: isDark ? '#999' : currentTheme.colors.textSecondary,
                     }}>
                       {group.description}
                     </div>
@@ -557,8 +568,8 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
                     minWidth: '28px',
                     width: '28px',
                     height: '28px',
-                    borderColor: solitudeTheme.colors.error,
-                    color: solitudeTheme.colors.error,
+                    borderColor: currentTheme.colors.error,
+                    color: currentTheme.colors.error,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -577,11 +588,11 @@ const GroupManagerPanel: FC<GroupManagerPanelProps> = ({
       {/* Filter Status */}
       {selectedGroupIds.size > 0 && (
         <div style={{
-          padding: solitudeTheme.spacing.sm,
-          backgroundColor: solitudeTheme.colors.accent + '20',
-          borderRadius: solitudeTheme.borderRadius.md,
-          fontSize: solitudeTheme.typography.fontSize.sm,
-          color: solitudeTheme.colors.textPrimary,
+          padding: currentTheme.spacing.sm,
+          backgroundColor: currentTheme.colors.accent + '20',
+          borderRadius: currentTheme.borderRadius.md,
+          fontSize: currentTheme.typography.fontSize.sm,
+          color: currentTheme.colors.textPrimary,
         }}>
           {t('groups.filteringBy', { count: selectedGroupIds.size })}
         </div>

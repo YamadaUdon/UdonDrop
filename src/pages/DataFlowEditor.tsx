@@ -31,6 +31,7 @@ import PropertiesPanel from '../components/PropertiesPanel';
 import EdgePropertiesPanel from '../components/EdgePropertiesPanel';
 import MenuBar from '../components/MenuBar';
 import GroupManagerPanel from '../components/GroupManagerPanel';
+import LayoutSelector from '../components/LayoutSelector';
 import { usePipeline } from '../hooks/usePipeline';
 import { groupManager } from '../services/groupManager';
 import { exportToExcel } from '../utils/excelExport';
@@ -93,6 +94,7 @@ function DataFlowEditorInner() {
   const [persistedAnalysisMode, setPersistedAnalysisMode] = useState<'none' | 'impact' | 'dependency' | 'path' | 'critical'>('none');
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [showGroupManager, setShowGroupManager] = useState(false);
+  const [showLayoutSelector, setShowLayoutSelector] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Set<string>>(new Set());
   const { savePipeline, loadPipeline, isLoading } = usePipeline();
@@ -518,128 +520,28 @@ function DataFlowEditorInner() {
 
   // Export functions
   const handleExportPNG = useCallback(async () => {
-    if (!reactFlowInstance) return;
+    if (!reactFlowInstance || !nodes.length) return;
     
     try {
-      // Get the React Flow wrapper element (contains the entire flow)
-      const flowElement = document.querySelector('.react-flow') as HTMLElement;
-      if (!flowElement) {
-        alert('Unable to find flow element for export');
-        return;
-      }
-
-      // Hide UI elements and make background transparent for export
-      const controlsElement = flowElement.querySelector('.react-flow__controls') as HTMLElement;
-      const minimapElement = flowElement.querySelector('.react-flow__minimap') as HTMLElement;
-      const attributionElement = flowElement.querySelector('.react-flow__attribution') as HTMLElement;
-      const backgroundElement = flowElement.querySelector('.react-flow__background') as HTMLElement;
-      
-      const originalStyles: { element: HTMLElement; property: string; value: string }[] = [];
-      
-      // Hide UI elements
-      [controlsElement, minimapElement, attributionElement].forEach((el) => {
-        if (el) {
-          originalStyles.push({ element: el, property: 'display', value: el.style.display });
-          el.style.display = 'none';
-        }
-      });
-      
-      // Make background transparent
-      if (backgroundElement) {
-        originalStyles.push({ element: backgroundElement, property: 'opacity', value: backgroundElement.style.opacity });
-        backgroundElement.style.opacity = '0';
-      }
-      
-      // Make the main flow element background transparent
-      originalStyles.push({ element: flowElement, property: 'backgroundColor', value: flowElement.style.backgroundColor });
-      flowElement.style.backgroundColor = 'transparent';
-
-      // 動的にhtml2canvasをインポート（必要な時だけロード）
-      const html2canvas = (await import('html2canvas')).default;
-      
-      // Configure html2canvas options for transparent background
-      const canvas = await html2canvas(flowElement, {
-        useCORS: true,
-        allowTaint: true
-        // Note: html2canvas will capture with transparent background when elements have transparent backgrounds
-      });
-
-      // Restore all original styles
-      originalStyles.forEach(({ element, property, value }) => {
-        (element.style as any)[property] = value || '';
-      });
-
-      // Convert canvas to blob and download
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.download = `dataflow-diagram-${new Date().toISOString().split('T')[0]}.png`;
-          link.href = url;
-          link.click();
-          URL.revokeObjectURL(url);
-        }
-      }, 'image/png');
-      
+      const { exportToPNG } = await import('../utils/imageExport');
+      await exportToPNG(nodes, edges, reactFlowInstance);
     } catch (error) {
       console.error('Error exporting PNG:', error);
       alert('Failed to export PNG. Please try again.');
     }
-  }, [reactFlowInstance, theme.colors.background]);
+  }, [reactFlowInstance, nodes, edges]);
 
-  const handleExportSVG = useCallback(() => {
-    if (!nodes.length) return;
+  const handleExportSVG = useCallback(async () => {
+    if (!reactFlowInstance || !nodes.length) return;
     
-    const svgWidth = 1024;
-    const svgHeight = 768;
-    
-    let svgContent = `
-      <svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
-          </marker>
-        </defs>
-        <rect width="100%" height="100%" fill="white"/>
-    `;
-    
-    // Add edges
-    edges.forEach(edge => {
-      const sourceNode = nodes.find(n => n.id === edge.source);
-      const targetNode = nodes.find(n => n.id === edge.target);
-      
-      if (sourceNode && targetNode) {
-        const x1 = sourceNode.position.x + 80;
-        const y1 = sourceNode.position.y + 30;
-        const x2 = targetNode.position.x + 80;
-        const y2 = targetNode.position.y + 30;
-        
-        svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)"/>`;
-      }
-    });
-    
-    // Add nodes
-    nodes.forEach(node => {
-      const x = node.position.x;
-      const y = node.position.y;
-      
-      svgContent += `
-        <rect x="${x}" y="${y}" width="160" height="60" rx="8" fill="#fff" stroke="#ccc" stroke-width="1"/>
-        <text x="${x + 10}" y="${y + 25}" font-family="Arial, sans-serif" font-size="14" fill="#333">${node.data.label}</text>
-        <text x="${x + 10}" y="${y + 45}" font-family="Arial, sans-serif" font-size="12" fill="#666">${node.type}</text>
-      `;
-    });
-    
-    svgContent += '</svg>';
-    
-    const blob = new Blob([svgContent], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = 'dataflow-diagram.svg';
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [nodes, edges]);
+    try {
+      const { exportToSVG } = await import('../utils/imageExport');
+      await exportToSVG(nodes, edges, reactFlowInstance);
+    } catch (error) {
+      console.error('Error exporting SVG:', error);
+      alert('Failed to export SVG. Please try again.');
+    }
+  }, [reactFlowInstance, nodes, edges]);
 
   // JSON Export function
   const handleExportJSON = useCallback(() => {
@@ -743,199 +645,22 @@ function DataFlowEditorInner() {
     }
   }, [setNodes, setEdges]);
 
-  // Enhanced Auto-layout function with improved algorithm
-  const handleAutoLayout = useCallback(() => {
+  // Enhanced Auto-layout function with multiple algorithms
+  const handleAutoLayout = useCallback(async (layoutType: 'hierarchical' | 'force' | 'circular' | 'grid' = 'hierarchical') => {
     if (nodes.length === 0) return;
 
-    const nodeMap = new Map(nodes.map(node => [node.id, node]));
+    const { enhancedAutoLayout, animateLayout } = await import('../utils/layoutAlgorithms');
     
-    // Node type priorities for better layer organization
-    const nodeTypePriorities = {
-      // Data sources (highest priority - leftmost)
-      'data_lake': 1,
-      'data_warehouse': 1,
-      'csv_input': 2,
-      'json_input': 2,
-      'parquet_input': 2,
-      'database_input': 2,
-      'api_input': 2,
-      
-      // Processing nodes (middle priority)
-      'process': 5,
-      'transform': 5,
-      'filter': 5,
-      'aggregate': 6,
-      'join': 6,
-      'split': 6,
-      
-      // ML/AI nodes
-      'model_train': 7,
-      'model_predict': 8,
-      'model_evaluate': 8,
-      
-      // Data marts and outputs (lowest priority - rightmost)
-      'data_mart': 9,
-      'csv_output': 10,
-      'json_output': 10,
-      'parquet_output': 10,
-      'database_output': 10,
-      'api_output': 10,
-      'bi_tool': 11,
-    };
-    
-    // Calculate node depths using topological sort
-    const calculateNodeDepths = () => {
-      const depths = new Map<string, number>();
-      const inDegree = new Map<string, number>();
-      const adjList = new Map<string, string[]>();
-      
-      // Initialize
-      nodes.forEach(node => {
-        inDegree.set(node.id, 0);
-        adjList.set(node.id, []);
-        depths.set(node.id, 0);
-      });
-      
-      // Build adjacency list and calculate in-degrees
-      edges.forEach(edge => {
-        adjList.get(edge.source)?.push(edge.target);
-        inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
-      });
-      
-      // Find starting nodes (no incoming edges)
-      const queue: string[] = [];
-      nodes.forEach(node => {
-        if (inDegree.get(node.id) === 0) {
-          queue.push(node.id);
-          // Consider node type priority for initial depth
-          const typePriority = nodeTypePriorities[node.type as keyof typeof nodeTypePriorities] || 5;
-          depths.set(node.id, Math.max(0, typePriority - 3));
-        }
-      });
-      
-      // Process queue
-      while (queue.length > 0) {
-        const currentId = queue.shift()!;
-        const currentDepth = depths.get(currentId) || 0;
-        
-        adjList.get(currentId)?.forEach(neighborId => {
-          const newDepth = currentDepth + 1;
-          depths.set(neighborId, Math.max(depths.get(neighborId) || 0, newDepth));
-          
-          inDegree.set(neighborId, (inDegree.get(neighborId) || 0) - 1);
-          if (inDegree.get(neighborId) === 0) {
-            queue.push(neighborId);
-          }
-        });
-      }
-      
-      return depths;
-    };
-    
-    const nodeDepths = calculateNodeDepths();
-    
-    // Group nodes by depth (layers)
-    const layers = new Map<number, Node[]>();
-    const maxDepth = Math.max(...Array.from(nodeDepths.values()));
-    
-    nodes.forEach(node => {
-      const depth = nodeDepths.get(node.id) || 0;
-      if (!layers.has(depth)) {
-        layers.set(depth, []);
-      }
-      layers.get(depth)!.push(node);
+    const newNodes = enhancedAutoLayout(nodes, edges, layoutType, {
+      nodeWidth: 200,
+      nodeHeight: 80,
+      horizontalSpacing: 100,
+      verticalSpacing: 150,
+      padding: 80,
     });
     
-    // Sort nodes within each layer by type priority and then by connections
-    layers.forEach((layerNodes, depth) => {
-      layerNodes.sort((a, b) => {
-        // First by type priority
-        const aPriority = nodeTypePriorities[a.type as keyof typeof nodeTypePriorities] || 5;
-        const bPriority = nodeTypePriorities[b.type as keyof typeof nodeTypePriorities] || 5;
-        if (aPriority !== bPriority) {
-          return aPriority - bPriority;
-        }
-        
-        // Then by number of connections (more connected nodes in center)
-        const aConnections = edges.filter(e => e.source === a.id || e.target === a.id).length;
-        const bConnections = edges.filter(e => e.source === b.id || e.target === b.id).length;
-        return bConnections - aConnections;
-      });
-    });
-    
-    // Calculate optimal spacing
-    const baseNodeWidth = 200;
-    const baseNodeHeight = 80;
-    const minHorizontalSpacing = 60;
-    const minVerticalSpacing = 100;
-    
-    // Dynamic spacing based on layer size
-    const getLayerSpacing = (layerSize: number) => {
-      const availableWidth = Math.max(1200, window.innerWidth - 100);
-      const totalNodeWidth = layerSize * baseNodeWidth;
-      const totalSpacing = availableWidth - totalNodeWidth;
-      return Math.max(minHorizontalSpacing, totalSpacing / Math.max(1, layerSize - 1));
-    };
-    
-    // Position nodes
-    const newNodes = nodes.map(node => {
-      const depth = nodeDepths.get(node.id) || 0;
-      const layer = layers.get(depth) || [];
-      const nodeIndex = layer.findIndex(n => n.id === node.id);
-      const layerSize = layer.length;
-      
-      // Vertical position
-      const y = 80 + depth * (baseNodeHeight + minVerticalSpacing);
-      
-      // Horizontal position with improved centering
-      const horizontalSpacing = getLayerSpacing(layerSize);
-      const totalLayerWidth = (layerSize - 1) * horizontalSpacing + layerSize * baseNodeWidth;
-      const startX = Math.max(50, (Math.max(1200, window.innerWidth - 100) - totalLayerWidth) / 2);
-      const x = startX + nodeIndex * (baseNodeWidth + horizontalSpacing);
-      
-      return {
-        ...node,
-        position: { x, y },
-      };
-    });
-    
-    // Apply smooth animation by updating positions gradually
-    const animateLayout = (targetNodes: typeof newNodes, duration: number = 500) => {
-      const startTime = Date.now();
-      const initialPositions = nodes.map(node => ({ ...node.position }));
-      
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        
-        // Easing function (ease-out)
-        const easeOut = 1 - Math.pow(1 - progress, 3);
-        
-        const animatedNodes = nodes.map((node, index) => {
-          const target = targetNodes[index];
-          const initial = initialPositions[index];
-          
-          return {
-            ...node,
-            position: {
-              x: initial.x + (target.position.x - initial.x) * easeOut,
-              y: initial.y + (target.position.y - initial.y) * easeOut,
-            },
-          };
-        });
-        
-        setNodes(animatedNodes);
-        
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        }
-      };
-      
-      requestAnimationFrame(animate);
-    };
-    
-    // Start animation
-    animateLayout(newNodes);
+    // Apply smooth animation
+    animateLayout(nodes, newNodes, setNodes, 700);
   }, [nodes, edges, setNodes]);
 
   // Get related nodes for a given node with lineage options
@@ -1771,7 +1496,7 @@ function DataFlowEditorInner() {
           )}
           
           <button
-            onClick={handleAutoLayout}
+            onClick={() => handleAutoLayout()}
             style={{
               padding: '6px 12px',
               backgroundColor: theme.colors.accent,
@@ -1841,6 +1566,26 @@ function DataFlowEditorInner() {
             title="Manage node groups"
           >
             {showGroupManager ? t('filter.closeGroups') : t('filter.groups')}
+          </button>
+
+          <button
+            onClick={() => setShowLayoutSelector(true)}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: theme.colors.accent,
+              color: theme.colors.surface,
+              border: 'none',
+              borderRadius: theme.borderRadius.sm,
+              fontSize: theme.typography.fontSize.sm,
+              cursor: 'pointer',
+              fontWeight: theme.typography.fontWeight.medium,
+              transition: theme.transitions.fast,
+              minWidth: '100px',
+              whiteSpace: 'nowrap' as const,
+            }}
+            title="Auto layout with different algorithms"
+          >
+            {t('layout.autoLayout', 'Auto Layout')}
           </button>
 
           {(showOnlyRelated || lineageMode !== 'none' || selectedGroupIds.size > 0) && (
@@ -1920,6 +1665,12 @@ function DataFlowEditorInner() {
             onClose={() => setShowGroupManager(false)}
           />
         )}
+
+        <LayoutSelector
+          isVisible={showLayoutSelector}
+          onLayoutChange={handleAutoLayout}
+          onClose={() => setShowLayoutSelector(false)}
+        />
         </div>
       </div>
     </div>

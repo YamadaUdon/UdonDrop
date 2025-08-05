@@ -44,6 +44,7 @@ export const exportToExcel = async (data: ExcelExportData) => {
       'Position X': Math.round(node.position.x),
       'Position Y': Math.round(node.position.y),
       'Group': getNodeGroup(node.id, data.groups, data.nodes),
+      'View Group': getNodeGroup(node.id, data.groups, data.nodes) !== 'None' ? '🔗 View Groups' : '-',
       'From (Sources)': fromSummary,
       'To (Targets)': toSummary,
       'Connections Detail': incomingEdges.length + outgoingEdges.length > 0 ? '📋 View Details' : '-',
@@ -60,9 +61,9 @@ export const exportToExcel = async (data: ExcelExportData) => {
     const incomingEdges = data.edges.filter(e => e.target === node.id);
     const outgoingEdges = data.edges.filter(e => e.source === node.id);
     
-    // Add hyperlink to first source in "From (Sources)" column (Column G)
+    // Add hyperlink to first source in "From (Sources)" column (Column H - shifted by 1)
     if (incomingEdges.length > 0) {
-      const cellAddress = `G${excelRow}`;
+      const cellAddress = `H${excelRow}`;
       const firstSourceRow = nodeRowMap.get(incomingEdges[0].source);
       if (firstSourceRow) {
         allNodesSheet[cellAddress] = {
@@ -75,9 +76,9 @@ export const exportToExcel = async (data: ExcelExportData) => {
       }
     }
     
-    // Add hyperlink to first target in "To (Targets)" column (Column H)
+    // Add hyperlink to first target in "To (Targets)" column (Column I - shifted by 1)
     if (outgoingEdges.length > 0) {
-      const cellAddress = `H${excelRow}`;
+      const cellAddress = `I${excelRow}`;
       const firstTargetRow = nodeRowMap.get(outgoingEdges[0].target);
       if (firstTargetRow) {
         allNodesSheet[cellAddress] = {
@@ -92,12 +93,25 @@ export const exportToExcel = async (data: ExcelExportData) => {
     
     // Add link to detailed connections sheet for nodes with multiple connections
     if (incomingEdges.length + outgoingEdges.length > 0) {
-      const cellAddress = `I${excelRow}`; // Column I is "Connections Detail"
+      const cellAddress = `J${excelRow}`; // Column J is "Connections Detail" (shifted by 1)
       allNodesSheet[cellAddress] = {
         v: '📋 View Details',
         l: { 
           Target: `#'Node Connections'!A${excelRow}`, 
           Tooltip: `🔍 Click to view all connections for ${node.data?.label || node.id} (${incomingEdges.length} sources, ${outgoingEdges.length} targets)` 
+        }
+      };
+    }
+    
+    // Add link to Groups Overview sheet for nodes with groups
+    const nodeGroups = getNodeGroup(node.id, data.groups, data.nodes);
+    if (nodeGroups !== 'None') {
+      const cellAddress = `G${excelRow}`; // Column G is "View Group"
+      allNodesSheet[cellAddress] = {
+        v: '🔗 View Groups',
+        l: { 
+          Target: `#'Groups Overview'!A1`, 
+          Tooltip: `🔍 Click to view groups overview. This node belongs to: ${nodeGroups}` 
         }
       };
     }
@@ -111,6 +125,7 @@ export const exportToExcel = async (data: ExcelExportData) => {
     { wch: 10 }, // Position X
     { wch: 10 }, // Position Y
     { wch: 15 }, // Group
+    { wch: 12 }, // View Group
     { wch: 25 }, // From (Sources)
     { wch: 25 }, // To (Targets)
     { wch: 15 }, // Connections Detail
@@ -119,6 +134,86 @@ export const exportToExcel = async (data: ExcelExportData) => {
   ];
   
   XLSX.utils.book_append_sheet(workbook, allNodesSheet, 'All Nodes');
+  
+  // Sheet: Groups Overview
+  if (data.groups && data.groups.size > 0) {
+    const groupsOverviewData = Array.from(data.groups.entries()).map(([ groupId, group ]) => {
+      const groupNodes = data.nodes.filter(node => group.nodes.has(node.id));
+      const groupEdges = data.edges.filter(edge => 
+        group.nodes.has(edge.source) || group.nodes.has(edge.target)
+      );
+      
+      // Count internal and external connections
+      let internalConnectionsCount = 0;
+      let externalConnectionsCount = 0;
+      
+      groupEdges.forEach(edge => {
+        if (group.nodes.has(edge.source) && group.nodes.has(edge.target)) {
+          internalConnectionsCount++;
+        } else {
+          externalConnectionsCount++;
+        }
+      });
+      
+      return {
+        'Group ID': groupId,
+        'Group Name': group.name,
+        'Color': group.color,
+        'Total Nodes': groupNodes.length,
+        'Internal Connections': internalConnectionsCount,
+        'External Connections': externalConnectionsCount,
+        'Total Connections': internalConnectionsCount + externalConnectionsCount,
+        'View Details': groupNodes.length > 0 ? '📋 View Group' : '-',
+      };
+    });
+    
+    const groupsOverviewSheet = XLSX.utils.json_to_sheet(groupsOverviewData);
+    
+    // Add hyperlinks to group detail sheets
+    Array.from(data.groups.entries()).forEach(([groupId, group], rowIndex) => {
+      const excelRow = rowIndex + 2;
+      const groupNodes = data.nodes.filter(node => group.nodes.has(node.id));
+      
+      if (groupNodes.length > 0) {
+        // Add hyperlink to group detail sheet
+        const cellAddress = `H${excelRow}`; // Column H is "View Details"
+        const sheetName = sanitizeSheetName(`Group - ${group.name}`);
+        groupsOverviewSheet[cellAddress] = {
+          v: '📋 View Group',
+          l: { 
+            Target: `#'${sheetName}'!A1`, 
+            Tooltip: `🔍 Click to view details for ${group.name} group (${groupNodes.length} nodes)` 
+          }
+        };
+        
+        // Add color cell styling hint
+        const colorCellAddress = `C${excelRow}`; // Column C is "Color"
+        if (groupsOverviewSheet[colorCellAddress]) {
+          groupsOverviewSheet[colorCellAddress] = {
+            v: group.color,
+            s: {
+              fill: { fgColor: { rgb: group.color.substring(1) } }, // Remove # from hex color
+              font: { color: { rgb: "FFFFFF" } }
+            }
+          };
+        }
+      }
+    });
+    
+    // Set column widths for groups overview sheet
+    groupsOverviewSheet['!cols'] = [
+      { wch: 20 }, // Group ID
+      { wch: 25 }, // Group Name
+      { wch: 15 }, // Color
+      { wch: 12 }, // Total Nodes
+      { wch: 20 }, // Internal Connections
+      { wch: 20 }, // External Connections
+      { wch: 18 }, // Total Connections
+      { wch: 15 }, // View Details
+    ];
+    
+    XLSX.utils.book_append_sheet(workbook, groupsOverviewSheet, 'Groups Overview');
+  }
   
   // Sheet 2: Node Connections Detail - Individual connections for each node
   const nodeConnectionsData: any[] = [];

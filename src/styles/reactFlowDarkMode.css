@@ -1,0 +1,86 @@
+/* React Flow Controls Dark Mode Styles */
+.dark .react-flow__controls {
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.dark .react-flow__controls-button {
+  background-color: #2a2a2a;
+  border: 1px solid #444;
+  color: #e0e0e0;
+}
+
+.dark .react-flow__controls-button:hover {
+  background-color: #3a3a3a;
+  border-color: #555;
+}
+
+.dark .react-flow__controls-button:active {
+  background-color: #4a4a4a;
+}
+
+.dark .react-flow__controls-button svg {
+  fill: #e0e0e0;
+}
+
+/* React Flow Minimap Dark Mode Styles */
+.dark .react-flow__minimap {
+  background-color: #1a1a1a;
+  border: 1px solid #333;
+}
+
+.dark .react-flow__minimap-mask {
+  fill: #2a2a2a;
+}
+
+.dark .react-flow__minimap-node {
+  fill: #4a4a4a;
+  stroke: #666;
+}
+
+/* React Flow Background Dark Mode */
+.dark .react-flow__background {
+  background-color: #0d0d0d;
+}
+
+.dark .react-flow__background pattern circle {
+  fill: #2a2a2a;
+}
+
+/* React Flow Attribution Dark Mode */
+.dark .react-flow__attribution {
+  background-color: rgba(26, 26, 26, 0.8);
+  color: #999;
+}
+
+.dark .react-flow__attribution a {
+  color: #60a5fa;
+}
+
+/* React Flow Edges Dark Mode */
+.dark .react-flow__edge-path {
+  stroke: #666;
+}
+
+.dark .react-flow__edge-text {
+  fill: #e0e0e0;
+}
+
+.dark .react-flow__edge-textbg {
+  fill: #1a1a1a;
+}
+
+/* React Flow Handle Dark Mode */
+.dark .react-flow__handle {
+  background-color: #4a4a4a;
+  border-color: #666;
+}
+
+.dark .react-flow__handle-connecting {
+  background-color: #60a5fa;
+}
+
+.dark .react-flow__handle-valid {
+  background-color: #34d399;
+}
